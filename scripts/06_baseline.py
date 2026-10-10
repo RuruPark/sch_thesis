@@ -4,70 +4,27 @@
 # Training으로 학습과 경보 임계값 선택, Validation(같은 설비의 뒤 기간)으로 평가
 #
 # 사용법: python scripts/06_baseline.py
-import argparse, glob, os
+import argparse, os
 import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import average_precision_score, precision_recall_curve
+from sklearn.metrics import average_precision_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TARGET = "target_30"
-NON_FEATURES = ["dev", "facility", "target_10", "target_30", "target_60", "minutes_to_event"]
-
-
-def load(split, src):
-    parts = [pd.read_parquet(f) for f in sorted(glob.glob(os.path.join(src, split, "*", "*.parquet")))]
-    d = pd.concat(parts)
-    return d[d[TARGET].notna()].copy()
-
-
-def best_threshold(y, score):
-    # Validation을 보고 임계값을 고를 경우, 성능이 부풀려지는 문제 있어 Training에서 F1 최대 지점으로 고정
-    p, r, t = precision_recall_curve(y, score)
-    f1 = 2 * p * r / np.clip(p + r, 1e-12, None)
-    return t[np.argmax(f1[:-1])]
-
-
-def alarm_metrics(d, alarm):
-    y = d[TARGET].to_numpy()
-    tp = int((alarm & (y == 1)).sum())
-    precision = tp / max(alarm.sum(), 1)
-    recall = tp / max((y == 1).sum(), 1)
-    f1 = 2 * precision * recall / max(precision + recall, 1e-12)
-
-    # 사건 단위: 이상 발생 30분 전 안에서 한 번이라도 경보가 울렸는지. 리드 타임은 가장 이른 경보 기준
-    pos = d[y == 1].assign(alarm=alarm[y == 1])
-    event_time = pos.index + pd.to_timedelta(pos["minutes_to_event"], unit="min")
-    ev = pos.groupby([pos["dev"].to_numpy(), event_time]).apply(
-        lambda g: g.loc[g["alarm"], "minutes_to_event"].max())
-    caught = ev.notna()
-
-    # 오경보: 이어진 경보 구간 중 30분 안에 이상 발생이 없었던 구간 수. 하루 단위는 설비 1대가 정상 운전한 하루 기준
-    t = d.index.to_series().reset_index(drop=True)
-    dev = d["dev"].reset_index(drop=True)
-    new_run = (dev != dev.shift()) | (t - t.shift() != pd.Timedelta(minutes=1)) | ~pd.Series(alarm).shift(fill_value=False)
-    run_id = (new_run & alarm).cumsum().where(alarm)
-    run_has_pos = pd.Series(y == 1).groupby(run_id).any()
-    false_runs = int((~run_has_pos).sum())
-    unit_days = len(d) / 1440
-
-    return dict(precision=precision, recall=recall, f1=f1,
-                events=len(ev), event_recall=caught.mean(),
-                lead_median=ev[caught].median(), false_alarm_per_day=false_runs / unit_days)
+from evaluate import FEATURES_DIR, RESULTS_DIR, TARGET, alarm_metrics, best_threshold, feature_columns, load
 
 
 def main():
     p = argparse.ArgumentParser(description="베이스라인 비교")
-    p.add_argument("--src", default=os.path.join(PROJECT_ROOT, "data", "features"))
-    p.add_argument("--dst", default=os.path.join(PROJECT_ROOT, "data", "results"))
+    p.add_argument("--src", default=FEATURES_DIR)
+    p.add_argument("--dst", default=RESULTS_DIR)
     args = p.parse_args()
     os.makedirs(args.dst, exist_ok=True)
 
     tr, va = load("Training", args.src), load("Validation", args.src)
-    feats = [c for c in tr.columns if c not in NON_FEATURES]
+    feats = feature_columns(tr)
     y_tr, y_va = tr[TARGET].to_numpy(), va[TARGET].to_numpy()
     print(f"Training {len(tr):,}행 양성 {y_tr.mean():.4f} / Validation {len(va):,}행 양성 {y_va.mean():.4f}")
 
