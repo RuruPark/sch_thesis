@@ -11,6 +11,7 @@ FEATURES_DIR = os.path.join(PROJECT_ROOT, "data", "features")
 RESULTS_DIR = os.path.join(PROJECT_ROOT, "data", "results")
 TARGET = "target_30"
 NON_FEATURES = ["dev", "facility", "target_10", "target_30", "target_60", "minutes_to_event"]
+HIST = "마지막이상후_분"
 
 
 def load(split, src=FEATURES_DIR):
@@ -21,6 +22,24 @@ def load(split, src=FEATURES_DIR):
 
 def feature_columns(d):
     return [c for c in d.columns if c not in NON_FEATURES]
+
+
+def split_fit_calib(d, frac=0.8):
+    # Training 안에서 임계값을 고를 경우, 학습에 쓴 행으로 고르면 트리 모델은 점수가 과하게 높아 임계값이 어긋나는 문제 있어 뒤 20%를 떼어 둠
+    rank = d.groupby("dev").cumcount() / d.groupby("dev")["dev"].transform("size")
+    return d[rank < frac], d[rank >= frac]
+
+
+def add_history_flag(d, fill):
+    # 이상 이력이 없는 시점(약 70%)을 중앙값으로 채울 경우, "최근에 이상이 있었다"와 구분이 안 되는 문제 있어 따로 표시하고 큰 값으로 채움
+    d = d.copy()
+    d["이상이력없음"] = d[HIST].isna().astype("float32")
+    d[HIST] = d[HIST].fillna(fill)
+    return d
+
+
+def clean(X):
+    return X.replace([np.inf, -np.inf], np.nan)
 
 
 def best_threshold(y, score):
