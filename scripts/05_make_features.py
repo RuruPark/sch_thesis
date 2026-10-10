@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # 조기 경보 모델 입력 특징: 최근 10/30/60분 통계, 상간 불균형, 최근 이상 이력, 시간대
-# 입력: data/cleaned, data/target  출력: data/features/<split>.parquet (예측 대상 시점만)
+# 입력: data/cleaned, data/target  출력: data/features/<split>/<설비종류>/<번호>.parquet (예측 대상 시점만)
 # 모든 특징은 그 시점까지의 값만 씀. 미래 값을 섞을 경우, 검증 성능이 실제보다 높게 나오는 문제 있음
 #
 # 사용법: python scripts/05_make_features.py
@@ -62,20 +62,22 @@ def main():
     args = p.parse_args()
     os.makedirs(args.dst, exist_ok=True)
 
-    for split in ["Training", "Validation"]:
-        parts = []
-        for f in sorted(glob.glob(os.path.join(args.target, split, "*", "*.parquet"))):
-            rel = os.path.relpath(f, args.target)
-            out = make_features(pd.read_parquet(os.path.join(args.clean, rel)), pd.read_parquet(f))
-            out.insert(0, "dev", int(os.path.basename(f)[:-8]))
-            out.insert(1, "facility", rel.split(os.sep)[1])
-            parts.append(out)
-        df = pd.concat(parts)
-        path = os.path.join(args.dst, f"{split}.parquet")
-        df.to_parquet(path)
-        print(f"{split}: {len(df):,}행, 특징 {df.shape[1] - len(TARGETS) - 2}개, "
-              f"30분 양성 비율 {df['target_30'].mean():.4f} -> {path}")
-
+    # 분할 전체를 한 파일로 저장할 경우, Training이 500MB라 16GB 노트북에서 다루기 버거워 설비별로 나눠 저장
+    total = {}
+    for f in sorted(glob.glob(os.path.join(args.target, "*", "*", "*.parquet"))):
+        rel = os.path.relpath(f, args.target)
+        split, facility = rel.split(os.sep)[:2]
+        out = make_features(pd.read_parquet(os.path.join(args.clean, rel)), pd.read_parquet(f))
+        out.insert(0, "dev", int(os.path.basename(f)[:-8]))
+        out.insert(1, "facility", facility)
+        path = os.path.join(args.dst, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        out.to_parquet(path)
+        n, pos = total.get(split, (0, 0))
+        total[split] = (n + len(out), pos + int((out["target_30"] == 1).sum()))
+    for split, (n, pos) in total.items():
+        print(f"{split}: {n:,}행, 30분 양성 {pos:,}건")
+    print("완료:", args.dst)
 
 if __name__ == "__main__":
     main()

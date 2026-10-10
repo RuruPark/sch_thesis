@@ -130,7 +130,7 @@ sch_thesis/
 |   +-- eda/               # EDA 집계표
 |   +-- cleaned/           # 2차 결과 parquet + clean_log.csv
 |   +-- target/            # 설비별 정답 라벨 + target_summary.csv
-|   +-- features/          # Training.parquet, Validation.parquet
+|   +-- features/          # 설비별 특징 parquet (예측 대상 시점만)
 +-- requirements.txt
 +-- .gitignore
 ```

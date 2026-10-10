@@ -15,7 +15,7 @@
 → 5분 이상 이어진 구간의 시작만 '이상 발생'으로 인정
 → 정상 운전 시점마다 10/30/60분 안에 이상 발생이 있는지 정답 표시
 → 그 시점까지의 값으로 특징 148개 생성
-→ data/features/Training.parquet, Validation.parquet
+→ data/features/<split>/<설비종류>/<번호>.parquet (16GB 노트북에서 다루기 쉽게 설비별로 저장)
 ```
 
 ## 기준과 근거
