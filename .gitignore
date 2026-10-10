@@ -1,0 +1,13 @@
+# 데이터는 용량 문제로 올리지 않음
+data/
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+.env
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
