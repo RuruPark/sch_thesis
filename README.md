@@ -12,7 +12,8 @@
 - 전처리 완료: 설비 105대, 약 394만 행을 1분 단위 "시각 × 측정항목 35개 + 라벨 5개" 표로 변환하고, 결측·이상값을 정리해 209개 파일 401만 행으로 확정
 - SOH 라벨은 같은 시각 평균값에 고정 경계(역률 0.6/0.8, 전류고조파 30/60, 전압고조파 3/5)를 적용한 규칙 라벨이다. 운전 구간에서 경계만으로 97~99%가 재현된다
 - 역률 SOH "경고"는 정지 구간의 93%에 붙어 있어 설비 상태가 아니라 정지 여부를 반영한다
-- 조기 경보 데이터셋 구성: 예측 대상 시점 Training 134만 / Validation 18만, 30분 내 이상 발생 양성 비율 2.3% / 2.9%, 특징 148개 (모델 결과는 진행 후 추가)
+- 조기 경보 데이터셋 구성: 예측 대상 시점 Training 134만 / Validation 18만, 30분 내 이상 발생 양성 비율 2.3% / 2.9%, 특징 148개
+- 베이스라인(Validation): Logistic Regression PR-AUC 0.493으로 전류고조파 임계값 규칙(0.326)보다 51% 높고, 설비 1대당 하루 오경보는 12.7회에서 6.6회로 줄었다
 
 ## 데이터
 
@@ -67,6 +68,18 @@ flowchart LR
 | 5분 이하만 보간 | 모든 결측 보간 | 긴 끊김을 채우면 없는 운전 패턴이 생긴다 | 결측 행 95,967행(2.4%)이 남는다 |
 | 정지 구간 유지 | 정지 구간 삭제 | 기동 패턴 분석에 정지 → 운전 전환이 필요하다 | SOH 분석 때는 운전 구간만 따로 골라야 한다 |
 
+## 실험 기록
+
+### 1. 베이스라인 비교
+[case-studies/baseline-comparison.md](case-studies/baseline-comparison.md)
+
+"전류고조파가 일정 값을 넘으면 경보"하는 단순 규칙과 특징 148개를 쓴 Logistic Regression을 같은 기준으로 비교했다. 규칙만으로도 PR-AUC 0.326(무작위 0.029)이 나왔고, Logistic Regression은 0.493으로 더 높았다. 이후 모델은 규칙 대비 개선 폭으로 보고한다.
+
+핵심 질문:
+- 단순 임계값 규칙은 어디까지 맞히는가
+- 여러 특징을 함께 쓰면 규칙보다 나아지는가
+- 이상 발생 몇 분 전에, 오경보 몇 번으로 잡는가
+
 ## 결과와 해석
 
 ![기동 상태별 SOH 라벨](charts/eda_soh_pf_by_state.png)
@@ -87,7 +100,8 @@ flowchart LR
 - 이상 발생 사건의 47%가 상위 5대 설비에 몰려 있다. 설비 단위 분할 때 사건 수 기준으로 층을 나눠야 한다.
 - 음수 유효전력 설비 4대(363, 406, 467, 548번)를 부호 반전할지 정하지 않았다.
 - 1시간 넘게 끊긴 73곳은 2021-01-23 ~ 02-08에 몰려 있다. 이 기간을 쓰는 윈도우는 결측 처리 방식을 따로 정해야 한다.
-- 다음 단계: 베이스라인("현재 상태 유지", 전류고조파 임계값 규칙, Logistic Regression) 구축 후 RF, GBM 계열 비교
+- 지금 평가는 같은 설비의 뒤 기간 기준이다. 처음 보는 설비에 대한 성능은 설비 단위 분할로 따로 확인해야 한다.
+- 다음 단계: 설비 단위 분할 평가, RF·GBM 계열 비교, 연속 경보 규칙으로 오경보 줄이기
 
 ## 실행 방법
 
@@ -101,6 +115,7 @@ python scripts/02_eda.py
 python scripts/03_clean.py
 python scripts/04_make_target.py
 python scripts/05_make_features.py
+python scripts/06_baseline.py
 ```
 
 ## 폴더 구조
@@ -109,12 +124,15 @@ python scripts/05_make_features.py
 sch_thesis/
 +-- README.md
 +-- CLAUDE.md              # Claude 작업 지침
++-- case-studies/
+|   +-- baseline-comparison.md # 규칙 vs Logistic Regression
 +-- docs/
 |   +-- CONVENTIONS.md     # 정리 규칙
 |   +-- preprocessing.md   # 전처리 기록 (1차, 2차)
 |   +-- eda.md             # EDA 기록
 |   +-- troubleshooting.md # 막혔던 문제 (STAR)
 |   +-- problem-definition.md # 조기 경보 문제 정의와 기준 근거
+|   +-- metrics.md         # 지표 정리
 +-- scripts/
 |   +-- 01_preprocess.py   # 원본 JSON → 설비별 parquet
 |   +-- 01b_export_csv.py  # parquet → csv.gz 사본
@@ -122,6 +140,7 @@ sch_thesis/
 |   +-- 03_clean.py        # 2차 전처리
 |   +-- 04_make_target.py  # 30분 내 이상 발생 정답 라벨
 |   +-- 05_make_features.py # 모델 입력 특징 148개
+|   +-- 06_baseline.py     # 베이스라인 비교
 +-- charts/                # README와 문서에 넣는 그래프
 +-- data/                  # git에 올리지 않음
 |   +-- raw/               # 원본
@@ -131,6 +150,7 @@ sch_thesis/
 |   +-- cleaned/           # 2차 결과 parquet + clean_log.csv
 |   +-- target/            # 설비별 정답 라벨 + target_summary.csv
 |   +-- features/          # 설비별 특징 parquet (예측 대상 시점만)
+|   +-- results/           # 실험 결과표
 +-- requirements.txt
 +-- .gitignore
 ```
@@ -143,3 +163,4 @@ sch_thesis/
 | 2026-10-10 | 전체 설비 EDA, SOH 라벨이 규칙 라벨임을 확인 | [eda.md](docs/eda.md), `[기능/EDA]` |
 | 2026-10-10 | 2차 전처리(1분 격자, 측정 상한값·전압 튐·주파수 이상 결측화, 5분 이하 보간) | [preprocessing.md](docs/preprocessing.md#2차-전처리), [troubleshooting.md](docs/troubleshooting.md), `[기능/전처리]` |
 | 2026-10-10 | 조기 경보 문제 정의 확정, 정답 라벨과 특징 148개 생성 | [problem-definition.md](docs/problem-definition.md), `[기능/전처리]`, `[기능/특징]` |
+| 2026-10-10 | 베이스라인 비교(항상 음성, 전류고조파 규칙, Logistic Regression) | [baseline-comparison.md](case-studies/baseline-comparison.md), `[실험/모델]` |
