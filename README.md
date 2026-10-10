@@ -13,7 +13,8 @@
 - SOH 라벨은 같은 시각 평균값에 고정 경계(역률 0.6/0.8, 전류고조파 30/60, 전압고조파 3/5)를 적용한 규칙 라벨이다. 운전 구간에서 경계만으로 97~99%가 재현된다
 - 역률 SOH "경고"는 정지 구간의 93%에 붙어 있어 설비 상태가 아니라 정지 여부를 반영한다
 - 조기 경보 데이터셋 구성: 예측 대상 시점 Training 134만 / Validation 18만, 30분 내 이상 발생 양성 비율 2.3% / 2.9%, 특징 148개
-- 베이스라인(Validation): Logistic Regression PR-AUC 0.493으로 전류고조파 임계값 규칙(0.326)보다 51% 높고, 설비 1대당 하루 오경보는 12.7회에서 6.6회로 줄었다
+- 30분 내 이상 발생 예측 PR-AUC: 전류고조파 임계값 규칙 0.326, LightGBM 0.722(같은 설비의 뒤 기간), 0.479(학습에 없던 설비)
+- LightGBM은 사건의 85.9%를 이상 발생 약 10분 전에 잡았고, 설비 1대당 하루 오경보는 규칙 12.4회에서 2.6회로 줄었다
 
 ## 데이터
 
@@ -80,28 +81,60 @@ flowchart LR
 - 여러 특징을 함께 쓰면 규칙보다 나아지는가
 - 이상 발생 몇 분 전에, 오경보 몇 번으로 잡는가
 
+### 2. 모델 비교
+[case-studies/model-comparison.md](case-studies/model-comparison.md)
+
+Random Forest와 LightGBM을 규칙, Logistic Regression과 같은 조건에서 비교했다. LightGBM이 PR-AUC 0.722로 가장 높았고, 중요도 상위는 최근 30/60분 전류고조파 최댓값과 마지막 이상 후 지난 분이었다. 이상 이력이 없는 시점을 따로 표시하는 방식도 함께 정했다.
+
+핵심 질문:
+- 트리 모델이 선형 모델보다 얼마나 나은가
+- 모델은 어떤 신호를 주로 보는가
+- 이상 이력이 없는 시점은 어떻게 다루는가
+
+### 3. 설비 단위 분할
+[case-studies/unit-split.md](case-studies/unit-split.md)
+
+설비를 5묶음으로 나눠, 같은 평가 행에서 그 설비를 학습에 넣었을 때와 뺐을 때를 비교했다. 처음 보는 설비에서 LightGBM PR-AUC는 0.479로 떨어졌지만 규칙(0.326)보다는 높았고 5묶음 중 4묶음에서 우세했다.
+
+핵심 질문:
+- 같은 설비 기간 분할 성능 중 설비를 외운 효과는 얼마인가
+- 처음 보는 설비에서도 규칙보다 나은가
+- 묶음마다 결과가 얼마나 흔들리는가
+
+### 4. 연속 경보 규칙
+[case-studies/alarm-rule.md](case-studies/alarm-rule.md)
+
+경보가 N분 이어질 때만 알리는 방식으로 오경보를 줄였다. LightGBM은 2분 대기에서 사건 재현율 74.9%, 하루 오경보 1.6회였고, 비슷한 오경보 수준에서 규칙보다 사건을 28.7%p 더 잡았다.
+
+핵심 질문:
+- 대기 시간을 늘리면 오경보와 놓친 사건이 어떻게 바뀌는가
+- 오경보 수준을 맞추면 모델 간 차이는 얼마인가
+
 ## 결과와 해석
 
-![기동 상태별 SOH 라벨](charts/eda_soh_pf_by_state.png)
+![모델별 PR-AUC](charts/model_pr_auc.png)
 
-역률 SOH "경고"는 정지 구간의 93%에 붙어 있었다. 멈춰 있으면 역률이 0으로 찍히기 때문이라 SOH 분석은 운전 구간만 쓴다.
+LightGBM은 같은 설비의 뒤 기간 평가에서 PR-AUC 0.722로 전류고조파 규칙(0.326)의 2.2배였다.
 
-![SOH 라벨별 기준 항목 분포](charts/eda_soh_thresholds.png)
+![본 적 있는 설비와 처음 보는 설비의 PR-AUC](charts/unit_split_pr_auc.png)
 
-운전 구간에서도 SOH 라벨은 기준 항목 값의 고정 경계로 거의 그대로 나뉜다. 그 항목을 입력에 넣고 같은 시각의 SOH를 맞히는 모델은 경계만 배우게 된다.
+학습에 없던 설비에서는 0.479로 떨어졌다. 앞의 성능 중 상당 부분이 설비별 패턴을 외운 효과이지만, 규칙보다는 여전히 높았다.
 
-![기동 순간 전류 상한](charts/eda_current_clip.png)
+![경보 대기 시간별 오경보와 사건 재현율](charts/alarm_rule_tradeoff.png)
 
-작업일지에서 의심했던 전류 512 A는 기동 순간 돌입전류가 센서 상한에서 잘린 값이었다.
+같은 오경보 수준에서 LightGBM이 규칙보다 많은 사건을 미리 잡았다. 대기 시간은 현장이 오경보와 놓친 사건 중 무엇을 더 꺼리는지에 따라 고른다.
+
+EDA 그래프와 해석(역률 라벨이 정지 여부를 반영하는 문제, SOH 라벨이 고정 경계 규칙 라벨인 근거, 전류 측정 상한)은 [docs/eda.md](docs/eda.md)에 정리했다.
 
 ## 한계와 다음 계획
 
 - 공조설비는 30분 내 이상 발생이 Training 19건, Validation 0건뿐이라 사실상 펌프/일반모터 설비의 문제이다.
-- 이상 발생 사건의 47%가 상위 5대 설비에 몰려 있다. 설비 단위 분할 때 사건 수 기준으로 층을 나눠야 한다.
+- 이상 발생 사건의 47%가 상위 5대 설비에 몰려 있다. 설비 단위 분할은 양성 수 순서로 묶음에 배정해 이 쏠림을 나눴다.
 - 음수 유효전력 설비 4대(363, 406, 467, 548번)를 부호 반전할지 정하지 않았다.
 - 1시간 넘게 끊긴 73곳은 2021-01-23 ~ 02-08에 몰려 있다. 이 기간을 쓰는 윈도우는 결측 처리 방식을 따로 정해야 한다.
-- 지금 평가는 같은 설비의 뒤 기간 기준이다. 처음 보는 설비에 대한 성능은 설비 단위 분할로 따로 확인해야 한다.
-- 다음 단계: 설비 단위 분할 평가, RF·GBM 계열 비교, 연속 경보 규칙으로 오경보 줄이기
+- 처음 보는 설비에서는 PR-AUC가 0.722에서 0.479로 떨어지고 하루 오경보가 2.6회에서 6.3회로 늘었다. 묶음별 편차도 크다(0.370~0.796).
+- LightGBM 중요도의 54.6%가 전류고조파 관련 특징 3개(최근 60/30분 최댓값, 최근 30분 평균)에 몰려 있다. 라벨이 전류고조파 경계로 정해지므로 다른 측정 항목에서 배운 것은 아직 작다.
+- 다음 단계: 처음 보는 설비 성능을 높이는 설비별 표준화 특징, 하이퍼파라미터 탐색, SHAP 해석, 10/60분 예측 구간 비교
 
 ## 실행 방법
 
@@ -116,6 +149,10 @@ python scripts/03_clean.py
 python scripts/04_make_target.py
 python scripts/05_make_features.py
 python scripts/06_baseline.py
+python scripts/07_model_compare.py
+python scripts/08_unit_split.py
+python scripts/09_alarm_rule.py
+python scripts/10_charts.py
 ```
 
 ## 폴더 구조
@@ -126,6 +163,9 @@ sch_thesis/
 +-- CLAUDE.md              # Claude 작업 지침
 +-- case-studies/
 |   +-- baseline-comparison.md # 규칙 vs Logistic Regression
+|   +-- model-comparison.md # Random Forest, LightGBM 비교
+|   +-- unit-split.md      # 처음 보는 설비 평가
+|   +-- alarm-rule.md      # 연속 경보 대기 시간
 +-- docs/
 |   +-- CONVENTIONS.md     # 정리 규칙
 |   +-- preprocessing.md   # 전처리 기록 (1차, 2차)
@@ -141,6 +181,11 @@ sch_thesis/
 |   +-- 04_make_target.py  # 30분 내 이상 발생 정답 라벨
 |   +-- 05_make_features.py # 모델 입력 특징 148개
 |   +-- 06_baseline.py     # 베이스라인 비교
+|   +-- 07_model_compare.py # Random Forest, LightGBM 비교
+|   +-- 08_unit_split.py   # 설비 단위 5묶음 분할 평가
+|   +-- 09_alarm_rule.py   # 연속 경보 대기 시간 비교
+|   +-- 10_charts.py       # 07~09번 결과 그래프
+|   +-- evaluate.py        # 06번 이후 공통 함수 (데이터 읽기, 임계값, 지표)
 +-- charts/                # README와 문서에 넣는 그래프
 +-- data/                  # git에 올리지 않음
 |   +-- raw/               # 원본
@@ -164,3 +209,4 @@ sch_thesis/
 | 2026-10-10 | 2차 전처리(1분 격자, 측정 상한값·전압 튐·주파수 이상 결측화, 5분 이하 보간) | [preprocessing.md](docs/preprocessing.md#2차-전처리), [troubleshooting.md](docs/troubleshooting.md), `[기능/전처리]` |
 | 2026-10-10 | 조기 경보 문제 정의 확정, 정답 라벨과 특징 148개 생성 | [problem-definition.md](docs/problem-definition.md), `[기능/전처리]`, `[기능/특징]` |
 | 2026-10-10 | 베이스라인 비교(항상 음성, 전류고조파 규칙, Logistic Regression) | [baseline-comparison.md](case-studies/baseline-comparison.md), `[실험/모델]` |
+| 2026-10-10 | Random Forest·LightGBM 비교, 설비 단위 분할 평가, 연속 경보 규칙 비교 | [model-comparison.md](case-studies/model-comparison.md), [unit-split.md](case-studies/unit-split.md), [alarm-rule.md](case-studies/alarm-rule.md), `[실험/모델]` |

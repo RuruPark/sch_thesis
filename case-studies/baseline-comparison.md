@@ -76,3 +76,5 @@ Logistic Regression 계수 절댓값 상위는 마지막 이상 후 지난 분(-
 - 비선형 모델(Random Forest, LightGBM)과 비교
 - "마지막 이상 후 지난 분"이 비어 있는 시점(이상 이력 없음)을 지금은 중앙값으로 채웠다. "이력 없음"을 따로 표시하는 방식과 비교
 - 오경보를 줄이는 경보 규칙(연속 N분 이상 경보일 때만 알림)
+
+결과: 설비 단위 분할은 [unit-split.md](unit-split.md), 비선형 모델과 이상 이력 표시는 [model-comparison.md](model-comparison.md), 연속 경보 규칙은 [alarm-rule.md](alarm-rule.md)에 정리했다.
