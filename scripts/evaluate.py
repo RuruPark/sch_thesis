@@ -12,12 +12,17 @@ RESULTS_DIR = os.path.join(PROJECT_ROOT, "data", "results")
 TARGET = "target_30"
 NON_FEATURES = ["dev", "facility", "target_10", "target_30", "target_60", "minutes_to_event"]
 HIST = "마지막이상후_분"
+# 공조설비는 30분 내 이상 발생이 Training 19건, Validation 0건이라 평가가 안 돼 본 실험에서 제외
+FACILITY = "1.펌프_일반모터"
+# 07번 이후 LightGBM 공통 설정. 트리 수는 학습 설비 뒤 20% 기간 기준 조기 종료로 정함
+LGBM_PARAMS = dict(n_estimators=3000, learning_rate=0.05, num_leaves=63, min_child_samples=100,
+                   subsample=0.8, subsample_freq=1, colsample_bytree=0.8, random_state=0, verbose=-1)
 
 
-def load(split, src=FEATURES_DIR):
-    parts = [pd.read_parquet(f) for f in sorted(glob.glob(os.path.join(src, split, "*", "*.parquet")))]
-    d = pd.concat(parts)
-    return d[d[TARGET].notna()].copy()
+def load(split, src=FEATURES_DIR, target=TARGET, facility=FACILITY):
+    pattern = os.path.join(src, split, facility or "*", "*.parquet")
+    d = pd.concat([pd.read_parquet(f) for f in sorted(glob.glob(pattern))])
+    return d[d[target].notna()].copy()
 
 
 def feature_columns(d):
@@ -67,21 +72,21 @@ def sustained(d, alarm, n):
     return (pos_in_run.reindex(rid.index) >= n).to_numpy() & alarm
 
 
-def alarm_metrics(d, alarm):
-    y = d[TARGET].to_numpy()
+def alarm_metrics(d, alarm, target=TARGET):
+    y = d[target].to_numpy()
     tp = int((alarm & (y == 1)).sum())
     precision = tp / max(alarm.sum(), 1)
     recall = tp / max((y == 1).sum(), 1)
     f1 = 2 * precision * recall / max(precision + recall, 1e-12)
 
-    # 사건 단위: 이상 발생 30분 전 안에서 한 번이라도 경보가 울렸는지. 리드 타임은 가장 이른 경보 기준
+    # 사건 단위: 이상 발생 직전 예측 구간(기본 30분) 안에서 한 번이라도 경보가 울렸는지. 리드 타임은 가장 이른 경보 기준
     pos = d[y == 1].assign(alarm=alarm[y == 1])
     event_time = pos.index + pd.to_timedelta(pos["minutes_to_event"], unit="min")
     ev = pos.groupby([pos["dev"].to_numpy(), event_time]).apply(
         lambda g: g.loc[g["alarm"], "minutes_to_event"].max())
     caught = ev.notna()
 
-    # 오경보: 이어진 경보 구간 중 30분 안에 이상 발생이 없었던 구간 수. 하루 단위는 설비 1대가 정상 운전한 하루 기준
+    # 오경보: 이어진 경보 구간 중 예측 구간 안에 이상 발생이 없었던 구간 수. 하루 단위는 설비 1대가 정상 운전한 하루 기준
     rid = run_ids(d, alarm)
     false_runs = int((~pd.Series(y == 1).groupby(rid).any()).sum())
 
