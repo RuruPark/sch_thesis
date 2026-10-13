@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# 07~09번 결과 그래프: 모델별 PR-AUC, 처음 보는 설비 성능, 연속 경보 대기 시간별 오경보와 사건 재현율
-# 입력: data/results/*.csv  출력: charts/model_pr_auc.png, charts/unit_split_pr_auc.png, charts/alarm_rule_tradeoff.png
+# 07~14번 결과 그래프: 모델별 PR-AUC, 처음 보는 설비 성능, 연속 경보, 방식별·예측 구간별 비교, SHAP
+# 입력: data/results/*.csv  출력: charts/*.png (결과 파일이 없는 그래프는 건너뜀)
 #
 # 사용법: python scripts/10_charts.py
 import argparse, os
@@ -97,6 +97,31 @@ def alarm_tradeoff(res, out):
     plt.close(fig)
 
 
+def approach_pr_auc(res, out, random_pr_auc):
+    # 08, 13, 14번 결과를 한 그림에. 평가 행과 묶음이 같아 바로 비교 가능
+    order = ["규칙", "값 예측 후 판정 (기준값 30)", "Logistic Regression", "Transformer", "LightGBM"]
+    labels = {"규칙": "규칙: 현재 전류고조파", "값 예측 후 판정 (기준값 30)": "값 예측 후 판정 (선행 연구 방식)"}
+    p = res.pivot(index="model", columns="setting", values="pr_auc").reindex(order).dropna(how="all")
+    fig, ax = plt.subplots(figsize=(7.5, 4))
+    h = 0.36
+    for j, (setting, color) in enumerate([("본 적 있는 설비", BLUE), ("처음 보는 설비", ORANGE)]):
+        ys = [i + (j - 0.5) * (h + 0.02) for i in range(len(p))]
+        ax.barh(ys, p[setting], height=h, color=color, label=setting)
+        for y, v in zip(ys, p[setting]):
+            ax.text(v + 0.008, y, f"{v:.3f}", va="center", fontsize=8, color=INK)
+    ax.axvline(random_pr_auc, color=INK, ls="--", lw=1, label=f"무작위 {random_pr_auc:.3f}")
+    ax.set_yticks(range(len(p)), [labels.get(m, m) for m in p.index], fontsize=9)
+    ax.invert_yaxis()
+    ax.set_xlim(0, 0.85)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlabel("PR-AUC (30분 내 이상 발생)")
+    ax.legend(frameon=False, fontsize=8, loc="upper center", bbox_to_anchor=(0.4, -0.2), ncol=3)
+    ax.set_title("방식별 PR-AUC: 학습에 그 설비를 넣었을 때와 뺐을 때", loc="left", fontsize=11, color=INK)
+    fig.tight_layout()
+    fig.savefig(out)
+    plt.close(fig)
+
+
 def horizon_pr_auc(by_h, out):
     # 처음 보는 설비 기준. 예측 구간마다 양성 비율이 달라 무작위 기준을 점으로 같이 표시
     models = [("규칙", ORANGE), ("Logistic Regression", AQUA), ("LightGBM", BLUE)]
@@ -175,6 +200,11 @@ def main():
     unit_path = os.path.join(args.src, "unit_split_metrics.csv")
     if os.path.exists(unit_path):
         unit_split(pd.read_csv(unit_path), os.path.join(args.dst, "unit_split_pr_auc.png"))
+    parts = [os.path.join(args.src, f) for f in ["unit_split_metrics.csv", "value_forecast_metrics.csv",
+                                                  "transformer_metrics.csv"]]
+    if all(os.path.exists(x) for x in parts):
+        approach_pr_auc(pd.concat([pd.read_csv(x) for x in parts]), os.path.join(args.dst, "approach_pr_auc.png"),
+                        float(base.loc["항상 음성", "pr_auc"]))
     paths = {h: os.path.join(args.src, f"unit_split{tag}_metrics.csv") for h, tag in [(10, "_h10"), (30, ""), (60, "_h60")]}
     if all(os.path.exists(x) for x in paths.values()):
         horizon_pr_auc({h: pd.read_csv(x) for h, x in paths.items()}, os.path.join(args.dst, "horizon_pr_auc.png"))
