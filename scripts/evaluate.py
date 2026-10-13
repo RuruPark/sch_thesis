@@ -17,6 +17,8 @@ FACILITY = "1.펌프_일반모터"
 # 07번 이후 LightGBM 공통 설정. 트리 수는 학습 설비 뒤 20% 기간 기준 조기 종료로 정함
 LGBM_PARAMS = dict(n_estimators=3000, learning_rate=0.05, num_leaves=63, min_child_samples=100,
                    subsample=0.8, subsample_freq=1, colsample_bytree=0.8, random_state=0, verbose=-1)
+NORM_BASE = ["전류평균", "전류고조파평균", "전압고조파평균", "유효전력평균", "무효전력평균",
+             "역률평균", "상전압평균", "온도", "주파수", "전류불균형", "전류고조파불균형"]
 
 
 def load(split, src=FEATURES_DIR, target=TARGET, facility=FACILITY):
@@ -41,6 +43,27 @@ def add_history_flag(d, fill):
     d["이상이력없음"] = d[HIST].isna().astype("float32")
     d[HIST] = d[HIST].fillna(fill)
     return d
+
+
+def add_unit_norm(tr, va, min_rows=1440):
+    # 설비마다 정격과 평소 부하가 달라, 절댓값만 볼 경우 학습에 없던 설비에서 기준이 어긋나는 문제 있음
+    # 그 설비의 지금까지 정상 운전 시점 평균·표준편차로 나눈 값(z)을 추가. 라벨은 쓰지 않고 과거 값만 씀
+    both = pd.concat([tr.assign(_part=0), va.assign(_part=1)])
+    both = both.assign(_t=both.index).sort_values(["dev", "_t"], kind="stable")
+    g = both.groupby("dev")
+    cols = {}
+    for c in NORM_BASE:
+        m = g[c].transform(lambda x: x.expanding(min_rows).mean())
+        sd = g[c].transform(lambda x: x.expanding(min_rows).std()).where(lambda v: v > 0)
+        for suffix in ["", "_mean60", "_max60"]:
+            cols[f"{c}{suffix}_z"] = ((both[c + suffix] - m) / sd).astype("float32")
+    both = pd.concat([both, pd.DataFrame(cols, index=both.index)], axis=1)
+    out = []
+    for part, orig in ((0, tr), (1, va)):
+        d = both[both["_part"] == part].drop(columns=["_part"])
+        d = d.set_index("_t", drop=True).rename_axis(orig.index.name)
+        out.append(d)
+    return out
 
 
 def clean(X):
