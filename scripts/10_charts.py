@@ -97,6 +97,32 @@ def alarm_tradeoff(res, out):
     plt.close(fig)
 
 
+def horizon_pr_auc(by_h, out):
+    # 처음 보는 설비 기준. 예측 구간마다 양성 비율이 달라 무작위 기준을 점으로 같이 표시
+    models = [("규칙", ORANGE), ("Logistic Regression", AQUA), ("LightGBM", BLUE)]
+    fig, ax = plt.subplots(figsize=(7.5, 3.6))
+    w = 0.26
+    for j, (model, color) in enumerate(models):
+        xs = [i + (j - 1) * (w + 0.02) for i in range(len(by_h))]
+        vals = [r.set_index(["setting", "model"]).loc[("처음 보는 설비", model), "pr_auc"] for r in by_h.values()]
+        ax.bar(xs, vals, width=w, color=color, label=model)
+        for x, v in zip(xs, vals):
+            ax.text(x, v + 0.01, f"{v:.3f}", ha="center", fontsize=8, color=INK)
+    for i, r in enumerate(by_h.values()):
+        base = r["positive_rate"].iloc[0]
+        ax.plot([i - 0.45, i + 0.45], [base, base], color=INK, ls="--", lw=1, zorder=3,
+                label="무작위 (양성 비율)" if i == 0 else None)
+    ax.set_xticks(range(len(by_h)), [f"{h}분 안 이상 발생" for h in by_h], fontsize=9)
+    ax.set_ylim(0, 0.75)
+    ax.grid(axis="x", visible=False)
+    ax.set_ylabel("PR-AUC (처음 보는 설비)")
+    ax.legend(frameon=False, fontsize=9, loc="upper left")
+    ax.set_title("예측 구간별 처음 보는 설비 PR-AUC", loc="left", fontsize=11, color=INK)
+    fig.tight_layout()
+    fig.savefig(out)
+    plt.close(fig)
+
+
 def shap_top(imp, out, n=15):
     r = imp.head(n)
     fig, ax = plt.subplots(figsize=(7.5, 4.6))
@@ -149,6 +175,9 @@ def main():
     unit_path = os.path.join(args.src, "unit_split_metrics.csv")
     if os.path.exists(unit_path):
         unit_split(pd.read_csv(unit_path), os.path.join(args.dst, "unit_split_pr_auc.png"))
+    paths = {h: os.path.join(args.src, f"unit_split{tag}_metrics.csv") for h, tag in [(10, "_h10"), (30, ""), (60, "_h60")]}
+    if all(os.path.exists(x) for x in paths.values()):
+        horizon_pr_auc({h: pd.read_csv(x) for h, x in paths.items()}, os.path.join(args.dst, "horizon_pr_auc.png"))
     shap_path = os.path.join(args.src, "shap_importance.csv")
     if os.path.exists(shap_path):
         shap_top(pd.read_csv(shap_path), os.path.join(args.dst, "shap_top.png"))
