@@ -3,7 +3,7 @@
 # 입력: data/cleaned  출력: data/target/<split>/<설비종류>/<번호>.parquet, data/target/target_summary.csv
 # 기준 근거는 docs/problem-definition.md
 #
-# 사용법: python scripts/04_make_target.py
+# 사용법: python scripts/04_make_target.py [--soh label_SOH_전압고조파평균 --dst data/target_vh]
 import argparse, glob, os
 import numpy as np
 import pandas as pd
@@ -21,11 +21,11 @@ def run_lengths(flag):
     return run_id, flag.groupby(run_id).transform("size")
 
 
-def make_target(d):
+def make_target(d, soh=SOH):
     out = pd.DataFrame(index=d.index)
     # 전류 > 0으로 자를 경우, Stop 상태의 대기 전류(중앙값 2.1A) 구간이 섞여 고조파 '주의'가 부풀려지는 문제 있음
     running = d[STATE].notna() & (d[STATE] != "Stop") & (d["flag_power_off"] == 0)
-    abnormal = running & d[SOH].isin(["주의", "경고"])
+    abnormal = running & d[soh].isin(["주의", "경고"])
     run_id, run_len = run_lengths(abnormal)
     is_start = abnormal & (run_id != run_id.shift())
     event_start = is_start & (run_len >= MIN_EVENT_MIN)
@@ -34,13 +34,13 @@ def make_target(d):
     out["is_abnormal"] = abnormal.astype("int8")
     out["event_start"] = event_start.astype("int8")
     # 예측 대상은 지금 정상인 운전 시점만. 5분 미만 깜빡임 중인 시점은 정상도 이상도 아니라서 뺌
-    out["eligible"] = (running & (d[SOH] == "정상")).astype("int8")
+    out["eligible"] = (running & (d[soh] == "정상")).astype("int8")
 
     t = pd.Series(np.arange(len(d), dtype="float64"), index=d.index)  # 1분 격자라 행 번호 = 분
     next_event = t.where(event_start).bfill().shift(-1)
     out["minutes_to_event"] = next_event - t
 
-    label_known = d[SOH].notna().astype(int)
+    label_known = d[soh].notna().astype(int)
     for h in HORIZONS:
         hit = out["minutes_to_event"] <= h
         # 앞으로 h분 중 라벨이 빈 분이 있거나 파일 끝을 넘으면 사건이 없었는지 알 수 없어서 정답을 비워 둠
@@ -54,6 +54,8 @@ def main():
     p = argparse.ArgumentParser(description="조기 경보 정답 라벨 생성")
     p.add_argument("--src", default=os.path.join(PROJECT_ROOT, "data", "cleaned"))
     p.add_argument("--dst", default=os.path.join(PROJECT_ROOT, "data", "target"))
+    # 전압고조파 보조 실험용. 기본은 전류고조파
+    p.add_argument("--soh", default=SOH)
     args = p.parse_args()
     src, dst = os.path.abspath(args.src), os.path.abspath(args.dst)
 
@@ -61,7 +63,7 @@ def main():
     for f in sorted(glob.glob(os.path.join(src, "*", "*", "*.parquet"))):
         rel = os.path.relpath(f, src)
         split, facility = rel.split(os.sep)[:2]
-        out = make_target(pd.read_parquet(f))
+        out = make_target(pd.read_parquet(f), args.soh)
         path = os.path.join(dst, rel)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         out.to_parquet(path)

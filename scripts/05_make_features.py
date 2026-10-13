@@ -3,7 +3,7 @@
 # 입력: data/cleaned, data/target  출력: data/features/<split>/<설비종류>/<번호>.parquet (예측 대상 시점만)
 # 모든 특징은 그 시점까지의 값만 씀. 미래 값을 섞을 경우, 검증 성능이 실제보다 높게 나오는 문제 있음
 #
-# 사용법: python scripts/05_make_features.py
+# 사용법: python scripts/05_make_features.py [--target data/target_vh --dst data/features_vh]
 import argparse, glob, os
 import numpy as np
 import pandas as pd
