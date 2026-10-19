@@ -14,6 +14,7 @@
 - 예측 구간(10/30/60분)과 라벨(전압고조파)을 바꿔도 학습에 없던 설비에서 LightGBM이 규칙보다 높았다. 묶음 20개 중 19개에서 우세했다.
 - 선행 연구처럼 값을 먼저 예측하고 기준값으로 판정하면 PR-AUC 0.222로 규칙보다도 낮았다. 실제 값을 그대로 써도 0.323이 상한이라, 전환 자체를 직접 분류해야 한다.
 - 원시 60분 시계열을 직접 보는 작은 Transformer는 학습에 없던 설비 PR-AUC 0.416으로 특징 기반 LightGBM(0.470)보다 낮았다.
+- LightGBM 하이퍼파라미터를 평가 설비를 뺀 중첩 교차검증으로 고르면 학습에 없던 설비 PR-AUC는 0.480으로 기본 설정보다 2% 높은 데 그쳤다.
 
 ## 데이터
 
@@ -92,6 +93,7 @@ flowchart LR
 | 전환 직접 분류 | 값 예측 후 기준값 판정 | 값 예측은 5분 미만 깜빡임과 이상을 가르지 못해 PR-AUC 상한이 0.323 | 앞으로의 값 자체는 알려 주지 않는다 |
 | LightGBM | Transformer | 같은 평가 틀에서 Transformer는 처음 보는 설비 PR-AUC 0.416으로 더 낮았고, GPU 없이 학습에 2시간이 걸림 | 원시 시계열을 직접 보는 모델의 장점 |
 | 처음 보는 설비 기준으로 결론 | 같은 설비 뒤 기간 기준 | 새 설비에 쓸 때의 성능을 부풀리지 않음 | 보고하는 수치가 0.738에서 0.470으로 낮아진다 |
+| 기본 설정 LightGBM | 탐색으로 고른 설정 | 중첩 교차검증에서 차이가 +0.010으로 묶음별 편차보다 작고, 묶음마다 고른 설정이 달랐음 | 사건 재현율 3.6%p, 하루 오경보 0.2회의 소폭 개선 |
 | 기존 특징 148개 | 설비별 z 특징 추가 | z 특징을 넣으면 처음 보는 설비 PR-AUC가 0.441로 낮아짐 | 하루 오경보 1회 감소 |
 
 ## 실험 기록
@@ -191,6 +193,16 @@ LightGBM 예측을 특징별 기여로 나눴다. 마지막 이상 후 지난 �
 - 원시 시계열을 직접 보는 딥러닝 모델이 특징 기반 LightGBM보다 나은가
 - 처음 보는 설비에서도 같은 순서가 유지되는가
 
+### 11. LightGBM 하이퍼파라미터 탐색
+[case-studies/tuning.md](case-studies/tuning.md)
+
+설정 21개를 Training 기간 안에서만 설비 묶음 교차검증으로 채점해 골랐다. 고른 설정은 처음 보는 설비 PR-AUC 0.544였지만, 평가 묶음 설비를 설정 선택에서도 뺀 중첩 교차검증에서는 0.480으로 기본 설정(0.470)과 차이가 작았다. 묶음마다 다른 후보가 뽑혀 주 결과는 기본 설정으로 유지했다.
+
+핵심 질문:
+- 설비를 덜 외우는 설정으로 처음 보는 설비 성능을 올릴 수 있는가
+- 설정 선택에 평가 설비가 섞이면 성능이 얼마나 부풀려지는가
+- 고른 설정이 설비 묶음이 바뀌어도 유지되는가
+
 ## 결과와 해석
 
 ![방식별 처음 보는 설비 PR-AUC](charts/approach_pr_auc.png)
@@ -216,7 +228,8 @@ LightGBM 예측을 특징별 기여로 나눴다. 마지막 이상 후 지난 �
 - 설비별 z 특징은 처음 보는 설비 성능을 올리지 못했다. 정격 같은 설비 정보로 맞추는 방식은 데이터에 정보가 없어 시도하지 못했다.
 - Transformer는 GPU 없이 작은 모델(차원 64, 2층)을 최대 10 epoch만 학습했다. 6번 중 2번은 최대 epoch에 닿아, 더 큰 설정에서 결과가 달라질 수 있다.
 - 음수 유효전력 설비 4대(363, 406, 467, 548번)를 부호 반전할지 정하지 않았다.
-- 다음 단계: 새 설비 초기 며칠로 임계값만 다시 맞추는 방식, 하이퍼파라미터 탐색, 10분 예측용 짧은 창 특징
+- 하이퍼파라미터 탐색은 무작위 21개만 봤다. 중첩 교차검증에서 개선 폭이 작아 더 넓게 찾지 않았다.
+- 다음 단계: 새 설비 초기 며칠로 임계값만 다시 맞추는 방식, 10분 예측용 짧은 창 특징
 
 ## 실행 방법
 
@@ -238,6 +251,8 @@ python scripts/10_charts.py
 python scripts/12_shap.py
 python scripts/13_value_forecast.py
 python scripts/14_transformer.py
+python scripts/15_tune.py
+python scripts/16_tune_nested.py
 
 # 추가 실험: 설비별 z 특징, 예측 구간, 전압고조파 라벨
 python scripts/08_unit_split.py --norm --tag norm
@@ -251,7 +266,7 @@ python scripts/10_charts.py
 
 발표용 표와 그래프는 위 스크립트를 모두 돌린 뒤 `notebooks/01_presentation.ipynb`를 위에서부터 실행하면 `data/` 아래 결과 파일에서 읽어 `charts/presentation/`에 다시 만든다.
 
-12~14번은 08번이 만든 `data/results/unit_split_assign.csv`(묶음 배정)를 쓰므로 08번 뒤에 실행한다. 14번은 GPU 없이 4코어에서 약 2시간 걸렸다.
+12~16번은 08번이 만든 `data/results/unit_split_assign.csv`(묶음 배정)를 쓰므로 08번 뒤에 실행한다. 16번은 15번의 후보 목록(`tune_search.csv`)을 쓰므로 15번 뒤에 실행한다. 4코어 CPU에서 14번은 약 2시간, 15번은 약 45분, 16번은 약 2시간 걸렸다.
 
 ## 폴더 구조
 
@@ -292,6 +307,8 @@ sch_thesis/
 |   +-- 12_shap.py         # LightGBM SHAP 해석
 |   +-- 13_value_forecast.py # 값 예측 후 판정 방식 재현
 |   +-- 14_transformer.py  # Transformer 비교 모델
+|   +-- 15_tune.py         # LightGBM 하이퍼파라미터 탐색
+|   +-- 16_tune_nested.py  # 중첩 교차검증으로 튜닝 효과 확인
 |   +-- evaluate.py        # 06번 이후 공통 함수 (데이터 읽기, 임계값, 지표)
 +-- notebooks/
 |   +-- 01_presentation.ipynb # 발표용 표와 그래프 (결과 파일에서 읽음)
@@ -323,3 +340,4 @@ sch_thesis/
 | 2026-10-13 | 공조설비를 빼고 펌프/일반모터 기준으로 06~09번 다시 계산 | `[실험/모델] 평가 대상을 펌프·일반모터 설비로 한정` |
 | 2026-10-13 | 설비별 z 특징, SHAP, 10/60분 예측 구간, 전압고조파 라벨 실험 | [unit-normalization.md](case-studies/unit-normalization.md), [shap-interpretation.md](case-studies/shap-interpretation.md), [horizon-comparison.md](case-studies/horizon-comparison.md), [voltage-harmonic.md](case-studies/voltage-harmonic.md) |
 | 2026-10-13 | 선행 연구 방식(값 예측 후 판정) 재현, Transformer 비교 | [value-forecast.md](case-studies/value-forecast.md), [transformer.md](case-studies/transformer.md) |
+| 2026-10-19 | 발표용 표·그래프 노트북, LightGBM 하이퍼파라미터 탐색과 중첩 교차검증 | [tuning.md](case-studies/tuning.md), `[실험/모델]` |
