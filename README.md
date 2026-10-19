@@ -249,6 +249,8 @@ python scripts/08_unit_split.py --src data/features_vh --rule-col 전압고조�
 python scripts/10_charts.py
 ```
 
+발표용 표와 그래프는 위 스크립트를 모두 돌린 뒤 `notebooks/01_presentation.ipynb`를 위에서부터 실행하면 `data/` 아래 결과 파일에서 읽어 `charts/presentation/`에 다시 만든다.
+
 12~14번은 08번이 만든 `data/results/unit_split_assign.csv`(묶음 배정)를 쓰므로 08번 뒤에 실행한다. 14번은 GPU 없이 4코어에서 약 2시간 걸렸다.
 
 ## 폴더 구조
@@ -291,7 +293,9 @@ sch_thesis/
 |   +-- 13_value_forecast.py # 값 예측 후 판정 방식 재현
 |   +-- 14_transformer.py  # Transformer 비교 모델
 |   +-- evaluate.py        # 06번 이후 공통 함수 (데이터 읽기, 임계값, 지표)
-+-- charts/                # README와 문서에 넣는 그래프
++-- notebooks/
+|   +-- 01_presentation.ipynb # 발표용 표와 그래프 (결과 파일에서 읽음)
++-- charts/                # README와 문서에 넣는 그래프 (presentation/은 발표용)
 +-- data/                  # git에 올리지 않음
 |   +-- raw/               # 원본
 |   +-- processed/         # 1차 결과 parquet + meta.csv
