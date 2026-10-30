@@ -203,6 +203,16 @@ LightGBM 예측을 특징별 기여로 나눴다. 마지막 이상 후 지난 �
 - 설정 선택에 평가 설비가 섞이면 성능이 얼마나 부풀려지는가
 - 고른 설정이 설비 묶음이 바뀌어도 유지되는가
 
+### 12. 다른 설비종류 추가
+[case-studies/extra-facilities.md](case-studies/extra-facilities.md)
+
+압축만 받아 두던 설비종류 8종을 zip에서 바로 읽어 10종 461대로 늘렸다. 펌프 기준 전류고조파 경계로 라벨이 97~99% 재현된 6종(공기압축기, 공작기계, 가열로, 압출기, 주조기, 열처리)의 Training을 학습에 더하자, 처음 보는 펌프 설비 PR-AUC가 0.491에서 0.603으로 올랐고 하루 오경보는 9.0회에서 7.6회로 줄었다.
+
+핵심 질문:
+- 다른 설비종류도 같은 라벨 경계를 따르는가
+- 학습 설비를 늘리면 처음 보는 펌프 설비 성능이 오르는가
+- 개선이 설비 묶음과 관계없이 나타나는가
+
 ## 결과와 해석
 
 ![방식별 처음 보는 설비 PR-AUC](charts/approach_pr_auc.png)
@@ -296,6 +306,7 @@ sch_thesis/
 |   +-- 01_preprocess.py   # 원본 JSON → 설비별 parquet
 |   +-- 01b_export_csv.py  # parquet → csv.gz 사본
 |   +-- 02_eda.py          # 결측·이상값·라벨 점검, 그래프
+|   +-- 02b_eda_facility.py # 설비종류별 라벨 경계·품질 점검
 |   +-- 03_clean.py        # 2차 전처리
 |   +-- 04_make_target.py  # 30분 내 이상 발생 정답 라벨
 |   +-- 05_make_features.py # 모델 입력 특징 148개
@@ -309,6 +320,7 @@ sch_thesis/
 |   +-- 14_transformer.py  # Transformer 비교 모델
 |   +-- 15_tune.py         # LightGBM 하이퍼파라미터 탐색
 |   +-- 16_tune_nested.py  # 중첩 교차검증으로 튜닝 효과 확인
+|   +-- 17_extra_facilities.py # 다른 설비종류를 학습에 더한 평가
 |   +-- evaluate.py        # 06번 이후 공통 함수 (데이터 읽기, 임계값, 지표)
 +-- notebooks/
 |   +-- 01_presentation.ipynb # 발표용 표와 그래프 (결과 파일에서 읽음)
@@ -341,3 +353,4 @@ sch_thesis/
 | 2026-10-13 | 설비별 z 특징, SHAP, 10/60분 예측 구간, 전압고조파 라벨 실험 | [unit-normalization.md](case-studies/unit-normalization.md), [shap-interpretation.md](case-studies/shap-interpretation.md), [horizon-comparison.md](case-studies/horizon-comparison.md), [voltage-harmonic.md](case-studies/voltage-harmonic.md) |
 | 2026-10-13 | 선행 연구 방식(값 예측 후 판정) 재현, Transformer 비교 | [value-forecast.md](case-studies/value-forecast.md), [transformer.md](case-studies/transformer.md) |
 | 2026-10-19 | 발표용 표·그래프 노트북, LightGBM 하이퍼파라미터 탐색과 중첩 교차검증 | [tuning.md](case-studies/tuning.md), `[실험/모델]` |
+| 2026-10-30 | 설비종류 8종 추가(zip 직접 읽기, 10종 461대), 설비종류별 점검, 6종을 학습에 더한 평가 | [extra-facilities.md](case-studies/extra-facilities.md), `[기능/전처리]`, `[기능/EDA]`, `[실험/모델]` |
