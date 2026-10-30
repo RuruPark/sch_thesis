@@ -4,7 +4,7 @@
 # 평가 틀은 08번과 같음(펌프 설비 5묶음, 묶음 설비의 Validation 기간). 학습 데이터만 "펌프" 대 "펌프 + 다른 설비종류 Training"
 # 조기 종료와 임계값은 두 모델 모두 펌프 학습 설비의 뒤 20%로 고정해, 차이가 학습 데이터에서만 나오게 함
 #
-# 사용법: python scripts/17_extra_facilities.py [--types 3.공기압축기 ...] [--neg-frac 0.2] [--tag 이름]
+# 사용법: python scripts/17_extra_facilities.py [--types 3.공기압축기 ...] [--neg-frac 0.2] [--seed 1] [--type-feature] [--only-extra] [--tag 이름]
 import argparse, glob, os
 import numpy as np
 import pandas as pd
@@ -20,12 +20,16 @@ N_FOLDS = 5
 EXTRA_TYPES = ["3.공기압축기", "4.공작기계", "6.가열로", "7.압출기", "9.주조기", "10.열처리"]
 
 
-def assign_folds(tr, target):
-    # 08번과 같은 배정. 펌프만으로 정해야 기준 결과(0.470)와 같은 묶음이 됨
+def assign_folds(tr, target, seed=0):
+    # seed 0은 08번과 같은 배정. 다른 seed는 양성 수 순서 5대씩 묶음 안에서만 묶음 번호를 섞어, 묶음마다 양성 수가 고르게 남게 함
     pos = tr.groupby("dev")[target].sum().sort_values(ascending=False, kind="stable")
-    with_pos, without = pos[pos > 0].index, pos[pos == 0].index
-    folds = {d: i % N_FOLDS for i, d in enumerate(with_pos)}
-    folds.update({d: i % N_FOLDS for i, d in enumerate(without)})
+    rng = np.random.default_rng(seed)
+    folds = {}
+    for devs in (pos[pos > 0].index, pos[pos == 0].index):
+        for start in range(0, len(devs), N_FOLDS):
+            block = devs[start:start + N_FOLDS]
+            order = rng.permutation(N_FOLDS)[:len(block)] if seed else np.arange(len(block))
+            folds.update({d: int(k) for d, k in zip(block, order)})
     return folds
 
 
@@ -60,6 +64,9 @@ def main():
     p.add_argument("--target", default=TARGET)
     p.add_argument("--types", nargs="*", default=EXTRA_TYPES)
     p.add_argument("--neg-frac", type=float, default=0.2)
+    p.add_argument("--seed", type=int, default=0, help="묶음 배정 시드. 0은 08번과 같은 배정")
+    p.add_argument("--type-feature", action="store_true", help="설비종류 번호를 특징으로 추가")
+    p.add_argument("--only-extra", action="store_true", help="펌프만 모델을 건너뜀 (민감도 확인용)")
     p.add_argument("--tag", default="")
     args = p.parse_args()
     os.makedirs(args.dst, exist_ok=True)
@@ -70,7 +77,10 @@ def main():
     ex = load_extra(args.src, args.types, target, args.neg_frac)
     print(f"펌프 Training {len(tr):,}행, Validation {len(va):,}행 / 추가 {ex['facility'].nunique()}종 "
           f"{ex['dev'].nunique()}대 {len(ex):,}행(양성 {int(ex[target].sum()):,})")
-    folds = assign_folds(tr, target)
+    if args.type_feature:
+        for d in (tr, va, ex):
+            d["설비종류"] = d["facility"].str.split(".").str[0].astype("float32")
+    folds = assign_folds(tr, target, args.seed)
     tr_fold, va_fold = tr["dev"].map(folds), va["dev"].map(folds)
 
     pooled, fold_rows = {}, []
@@ -84,11 +94,10 @@ def main():
         feats = [c for c in feats if c != "_w"]
 
         both = pd.concat([fit_p.assign(_w=1.0), fit_x])
-        models = {
-            "규칙": None,
-            "LightGBM 펌프만": fit_lgbm(fit_p, cal_p, feats, target),
-            "LightGBM 펌프+추가": fit_lgbm(both, cal_p, feats, target, both["_w"].to_numpy()),
-        }
+        models = {"규칙": None}
+        if not args.only_extra:
+            models["LightGBM 펌프만"] = fit_lgbm(fit_p, cal_p, feats, target)
+        models["LightGBM 펌프+추가"] = fit_lgbm(both, cal_p, feats, target, both["_w"].to_numpy())
         y = te[target].to_numpy()
         for name, m in models.items():
             if m is None:
@@ -99,7 +108,7 @@ def main():
             pooled.setdefault(name, []).append((s_te, s_te >= thr))
             fold_rows.append(dict(fold=k, model=name, units=te["dev"].nunique(), positives=int(y.sum()),
                                   pr_auc=average_precision_score(y, s_te)))
-        print(f"묶음 {k}: " + ", ".join(f"{r['model']} {r['pr_auc']:.3f}" for r in fold_rows[-3:]))
+        print(f"묶음 {k}: " + ", ".join(f"{r['model']} {r['pr_auc']:.3f}" for r in fold_rows[-len(models):]))
         del both
 
     va_sorted = pd.concat([va[va_fold == k] for k in range(N_FOLDS)])
@@ -108,7 +117,8 @@ def main():
     for name, parts in pooled.items():
         s = np.concatenate([x[0] for x in parts])
         alarm = np.concatenate([x[1] for x in parts])
-        rows.append(dict(model=name, types=" ".join(args.types), neg_frac=args.neg_frac,
+        rows.append(dict(model=name, types=" ".join(args.types), neg_frac=args.neg_frac, seed=args.seed,
+                         type_feature=args.type_feature,
                          pr_auc=average_precision_score(y_all, s), **alarm_metrics(va_sorted, alarm, target)))
     res = pd.DataFrame(rows)
     res.to_csv(prefix + "_metrics.csv", index=False, encoding="utf-8-sig")
