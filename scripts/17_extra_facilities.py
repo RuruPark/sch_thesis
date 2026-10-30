@@ -12,9 +12,10 @@ import lightgbm as lgb
 from sklearn.metrics import average_precision_score
 
 from evaluate import (FEATURES_DIR, HIST, LGBM_PARAMS, RESULTS_DIR, TARGET, add_history_flag, alarm_metrics,
-                      best_threshold, clean, feature_columns, load, split_fit_calib)
+                      best_threshold, clean, feature_columns, load, split_fit_calib, sustained)
 
 N_FOLDS = 5
+WAIT_MINUTES = [1, 2, 3, 5, 10]  # 09번과 같은 대기 시간
 # 02b_eda_facility.py에서 펌프 기준 전류고조파 경계(30/60)로 라벨이 97~99% 재현된 설비종류
 # 보일러(93%), 사출기(93%, 경고 62행)는 경계가 덜 맞고 이상 발생도 100건 남짓이라 뺌
 EXTRA_TYPES = ["3.공기압축기", "4.공작기계", "6.가열로", "7.압출기", "9.주조기", "10.열처리"]
@@ -78,6 +79,7 @@ def main():
     p.add_argument("--type-feature", action="store_true", help="설비종류 번호를 특징으로 추가")
     p.add_argument("--dev-balance", action="store_true", help="설비마다 양성 가중치 합을 맞춤")
     p.add_argument("--only-extra", action="store_true", help="펌프만 모델을 건너뜀 (민감도 확인용)")
+    p.add_argument("--shap", action="store_true", help="묶음마다 처음 보는 설비에서 펌프+추가 모델의 SHAP 기여도를 모음")
     p.add_argument("--tag", default="")
     args = p.parse_args()
     os.makedirs(args.dst, exist_ok=True)
@@ -94,7 +96,7 @@ def main():
     folds = assign_folds(tr, target, args.seed)
     tr_fold, va_fold = tr["dev"].map(folds), va["dev"].map(folds)
 
-    pooled, fold_rows = {}, []
+    pooled, fold_rows, shap_parts = {}, [], []
     for k in range(N_FOLDS):
         fit_p, cal_p = split_fit_calib(tr[tr_fold != k])
         fit_x, _ = split_fit_calib(ex)
@@ -123,6 +125,10 @@ def main():
             pooled.setdefault(name, []).append((s_te, s_te >= thr))
             fold_rows.append(dict(fold=k, model=name, units=te["dev"].nunique(), positives=int(y.sum()),
                                   pr_auc=average_precision_score(y, s_te)))
+        if args.shap:
+            # 처음 보는 설비 기준 해석. 마지막 열은 기준값(bias), 값은 log-odds 단위
+            c = models["LightGBM 펌프+추가"].predict_proba(clean(te[feats]), pred_contrib=True)[:, :-1]
+            shap_parts.append((feats, c, y))
         print(f"묶음 {k}: " + ", ".join(f"{r['model']} {r['pr_auc']:.3f}" for r in fold_rows[-len(models):]))
         del both
 
@@ -138,7 +144,24 @@ def main():
     res = pd.DataFrame(rows)
     res.to_csv(prefix + "_metrics.csv", index=False, encoding="utf-8-sig")
     pd.DataFrame(fold_rows).to_csv(prefix + "_folds.csv", index=False, encoding="utf-8-sig")
+    alarm_rows = []
+    for name, parts in pooled.items():
+        raw = np.concatenate([x[1] for x in parts])
+        for n in WAIT_MINUTES:
+            alarm_rows.append(dict(model=name, wait_min=n, **alarm_metrics(va_sorted, sustained(va_sorted, raw, n), target)))
+    pd.DataFrame(alarm_rows).to_csv(prefix + "_alarm.csv", index=False, encoding="utf-8-sig")
+
+    if shap_parts:
+        feats = shap_parts[0][0]
+        c = np.concatenate([x[1] for x in shap_parts])
+        y = np.concatenate([x[2] for x in shap_parts])
+        imp = pd.DataFrame({"feature": feats, "mean_abs_shap": np.abs(c).mean(axis=0),
+                            "mean_shap_pos": c[y == 1].mean(axis=0), "mean_shap_neg": c[y == 0].mean(axis=0)})
+        imp["share"] = imp["mean_abs_shap"] / imp["mean_abs_shap"].sum()
+        imp.sort_values("mean_abs_shap", ascending=False).to_csv(prefix + "_shap.csv", index=False, encoding="utf-8-sig")
+
     with pd.option_context("display.width", 220, "display.max_columns", 20):
+        print(pd.DataFrame(alarm_rows).round(3).to_string(index=False))
         print(res.drop(columns="types").round(4).to_string(index=False))
         print(pd.DataFrame(fold_rows).pivot_table(index="model", columns="fold", values="pr_auc").round(3))
     print("완료:", prefix)
