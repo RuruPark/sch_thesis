@@ -50,6 +50,16 @@ def load_extra(src, types, target, neg_frac, seed=0):
     return pd.concat(out)
 
 
+def dev_balance(d, target, w):
+    # 사건의 절반 가까이가 상위 5대에 몰려 그 설비의 버릇을 배우기 쉬움 → 설비마다 양성 가중치 합을 평균에 맞춤. 극단값은 0.2~5배로 자름
+    pos = (d[target] == 1).to_numpy()
+    dev = d["dev"].to_numpy()
+    devs, inv, cnt = np.unique(dev[pos], return_inverse=True, return_counts=True)
+    out = np.asarray(w, dtype="float64").copy()
+    out[pos] *= np.clip(cnt.mean() / cnt[inv], 0.2, 5)
+    return out
+
+
 def fit_lgbm(fit, cal, feats, target, weight=None):
     return lgb.LGBMClassifier(**LGBM_PARAMS).fit(
         clean(fit[feats]), fit[target].to_numpy(), sample_weight=weight,
@@ -66,6 +76,7 @@ def main():
     p.add_argument("--neg-frac", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=0, help="묶음 배정 시드. 0은 08번과 같은 배정")
     p.add_argument("--type-feature", action="store_true", help="설비종류 번호를 특징으로 추가")
+    p.add_argument("--dev-balance", action="store_true", help="설비마다 양성 가중치 합을 맞춤")
     p.add_argument("--only-extra", action="store_true", help="펌프만 모델을 건너뜀 (민감도 확인용)")
     p.add_argument("--tag", default="")
     args = p.parse_args()
@@ -96,8 +107,12 @@ def main():
         both = pd.concat([fit_p.assign(_w=1.0), fit_x])
         models = {"규칙": None}
         if not args.only_extra:
-            models["LightGBM 펌프만"] = fit_lgbm(fit_p, cal_p, feats, target)
-        models["LightGBM 펌프+추가"] = fit_lgbm(both, cal_p, feats, target, both["_w"].to_numpy())
+            w_p = dev_balance(fit_p, target, np.ones(len(fit_p))) if args.dev_balance else None
+            models["LightGBM 펌프만"] = fit_lgbm(fit_p, cal_p, feats, target, w_p)
+        w_b = both["_w"].to_numpy()
+        if args.dev_balance:
+            w_b = dev_balance(both, target, w_b)
+        models["LightGBM 펌프+추가"] = fit_lgbm(both, cal_p, feats, target, w_b)
         y = te[target].to_numpy()
         for name, m in models.items():
             if m is None:
@@ -118,7 +133,7 @@ def main():
         s = np.concatenate([x[0] for x in parts])
         alarm = np.concatenate([x[1] for x in parts])
         rows.append(dict(model=name, types=" ".join(args.types), neg_frac=args.neg_frac, seed=args.seed,
-                         type_feature=args.type_feature,
+                         type_feature=args.type_feature, dev_balance=args.dev_balance, src=os.path.basename(args.src.rstrip("/\\")),
                          pr_auc=average_precision_score(y_all, s), **alarm_metrics(va_sorted, alarm, target)))
     res = pd.DataFrame(rows)
     res.to_csv(prefix + "_metrics.csv", index=False, encoding="utf-8-sig")
