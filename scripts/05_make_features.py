@@ -3,7 +3,9 @@
 # 입력: data/cleaned, data/target  출력: data/features/<split>/<설비종류>/<번호>.parquet (예측 대상 시점만)
 # 모든 특징은 그 시점까지의 값만 씀. 미래 값을 섞을 경우, 검증 성능이 실제보다 높게 나오는 문제 있음
 #
-# 사용법: python scripts/05_make_features.py [--target data/target_vh --dst data/features_vh]
+# --extra: 상별 고조파, 경계 근접, 하루 이력, 고조파 전류 특징 추가 (data/features_v2용, case-studies/feature-extension.md)
+#
+# 사용법: python scripts/05_make_features.py [--target data/target_vh --dst data/features_vh] [--extra --dst data/features_v2]
 import argparse, glob, os
 import numpy as np
 import pandas as pd
@@ -22,7 +24,39 @@ def imbalance(d, item):
     return ((x.max(axis=1) - x.min(axis=1)) / mean).where(mean >= 1)
 
 
-def make_features(d, t):
+def extra_features(d, t, s):
+    h = s["전류고조파평균"]
+    f = {}
+    # 라벨은 상 평균 기준이라, 한 상이 먼저 경계를 넘는 경우를 평균만으로는 늦게 봄
+    ph = d[[f"{p}상전류고조파" for p in "RST"]].astype("float32")
+    hmax = ph.max(axis=1)
+    f["전류고조파최대상"] = hmax
+    f["전류고조파최대상_max30"] = hmax.rolling(30, min_periods=15).max()
+    f["전류고조파최대상_max60"] = hmax.rolling(60, min_periods=30).max()
+    f["전류고조파최대상_초과"] = hmax - h
+    # 주의 경계 30 기준. 라벨이 이 경계로 붙어서 거리와 접근 속도를 직접 줌
+    f["경계까지"] = 30 - h
+    for lo in (20, 25):
+        f[f"고조파{lo}이상_분60"] = (h >= lo).astype("float32").rolling(60, min_periods=30).sum()
+    f["전류고조파_기울기10"] = (h.rolling(5, min_periods=3).mean() - h.shift(5).rolling(5, min_periods=3).mean()) / 5
+    for span in (5, 15):
+        f[f"전류고조파_ewm{span}"] = h.ewm(span=span, min_periods=span).mean()
+    # 하루치 이력. 마지막이상후_분은 처음 보는 설비에서 이력이 짧아 비는 경우가 많음
+    abn = t["is_abnormal"].astype("float32")
+    rise = ((abn == 1) & (abn.shift(fill_value=0) == 0)).astype("float32")  # event_start는 5분 뒤에야 확정돼서 시작 순간만 셈
+    f["이상시작수_1440"] = rise.rolling(1440, min_periods=360).sum()
+    f["이상비율_1440"] = abn.rolling(1440, min_periods=360).mean()
+    f["전류고조파_q90_1440"] = h.rolling(1440, min_periods=360).quantile(0.9)
+    f["운전비율_1440"] = t["is_running"].astype("float32").rolling(1440, min_periods=360).mean()
+    # 고조파율은 전류가 작을 때 부풀려짐(docs/problem-definition.md). 고조파 전류 크기와 하루 최대 대비 부하를 같이 줌
+    hc = s["전류평균"] * h / 100
+    f["고조파전류"] = hc
+    f["고조파전류_max60"] = hc.rolling(60, min_periods=30).max()
+    f["부하율_1440"] = s["전류평균"] / s["전류평균"].rolling(1440, min_periods=360).max().where(lambda v: v > 0)
+    return pd.DataFrame(f, index=d.index)
+
+
+def make_features(d, t, extra=False):
     s = d[BASE].astype("float32").copy()
     s["전류불균형"] = imbalance(d, "전류")
     s["전류고조파불균형"] = imbalance(d, "전류고조파")
@@ -36,6 +70,8 @@ def make_features(d, t):
             feats[f"{c}_max{w}"] = r[c].max()
             feats[f"{c}_diff{w}"] = s[c] - s[c].shift(w)
     f = pd.DataFrame(feats, index=d.index)
+    if extra:
+        f = pd.concat([f, extra_features(d, t, s)], axis=1)
 
     abn = t["is_abnormal"].astype("float32")
     f["이상비율_60"] = abn.rolling(60, min_periods=30).mean()
@@ -59,6 +95,7 @@ def main():
     p.add_argument("--clean", default=os.path.join(PROJECT_ROOT, "data", "cleaned"))
     p.add_argument("--target", default=os.path.join(PROJECT_ROOT, "data", "target"))
     p.add_argument("--dst", default=os.path.join(PROJECT_ROOT, "data", "features"))
+    p.add_argument("--extra", action="store_true", help="보강 특징 추가")
     args = p.parse_args()
     os.makedirs(args.dst, exist_ok=True)
 
@@ -67,7 +104,7 @@ def main():
     for f in sorted(glob.glob(os.path.join(args.target, "*", "*", "*.parquet"))):
         rel = os.path.relpath(f, args.target)
         split, facility = rel.split(os.sep)[:2]
-        out = make_features(pd.read_parquet(os.path.join(args.clean, rel)), pd.read_parquet(f))
+        out = make_features(pd.read_parquet(os.path.join(args.clean, rel)), pd.read_parquet(f), args.extra)
         out.insert(0, "dev", int(os.path.basename(f)[:-8]))
         out.insert(1, "facility", facility)
         path = os.path.join(args.dst, rel)
