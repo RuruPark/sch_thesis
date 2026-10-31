@@ -125,4 +125,4 @@ seed 0, 펌프 + 6종 모델만 바꿔 돌렸다(기준 0.603, 하루 오경보 
 ## 다음에 확인할 것
 
 - 보강 특징 19개와 설비별 가중치: [feature-extension.md](feature-extension.md)
-- 추가 설비종류 자체를 평가 대상으로 넓혔을 때의 성능
+- 추가 설비종류 자체를 평가 대상으로 넓혔을 때의 성능: [widen-evaluation.md](widen-evaluation.md)
