@@ -365,4 +365,4 @@ sch_thesis/
 | 2026-10-13 | 선행 연구 방식(값 예측 후 판정) 재현, Transformer 비교 | [value-forecast.md](case-studies/value-forecast.md), [transformer.md](case-studies/transformer.md) |
 | 2026-10-19 | 발표용 표·그래프 노트북, LightGBM 하이퍼파라미터 탐색과 중첩 교차검증 | [tuning.md](case-studies/tuning.md), `[실험/모델]` |
 | 2026-10-30 | 설비종류 8종 추가(zip 직접 읽기, 10종 461대), 설비종류별 점검, 6종을 학습에 더한 평가 | [extra-facilities.md](case-studies/extra-facilities.md), `[기능/전처리]`, `[기능/EDA]`, `[실험/모델]` |
-| 2026-10-31 | 설비종류 추가 효과 반복 검증(묶음 배정 5가지), 특징 19개 보강, 설비별 가중치 비교, 새 주 모델 경보·SHAP | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md), `[기능/특징]`, `[실험/모델]` |
+| 2026-10-31 | 설비종류 추가 효과 반복 검증(묶음 배정 5가지), 특징 19개 보강, 설비별 가중치 비교, 새 주 모델 경보·SHAP, 상별 측정 항목·설비 정보 추가 비교(효과 없음) | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md), `[기능/특징]`, `[실험/모델]` |
