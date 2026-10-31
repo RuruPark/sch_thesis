@@ -10,13 +10,12 @@
 
 ## 핵심 결과
 
-- 압축만 받아 두던 설비종류 6종(322대)을 학습에 더하고 상별 고조파·하루 이력 특징 19개를 보강하자, 학습에 없던 펌프/일반모터 설비 PR-AUC가 0.484에서 0.636으로 올랐다(묶음 배정 5가지 평균). 2분 대기 경보로 사건 70.9%를 하루 오경보 2.5회로 잡았다. [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md)
-- 평가 대상을 7종으로 넓혀도, 전체 종류를 학습한 모델의 처음 보는 설비 PR-AUC가 7종 모두에서 같은 종류만 학습한 모델보다 높았다(7종 평균 0.497 → 0.593). 이득은 설비가 적은 종류에서 컸다. [widen-evaluation.md](case-studies/widen-evaluation.md)
-- 펌프만 학습한 기준 모델에서는 학습에 없던 설비에서 30분 내 이상 발생 예측 PR-AUC가 LightGBM 0.470, 전류고조파 임계값 규칙 0.327(무작위 0.039)이었다. 같은 설비의 뒤 기간 평가(0.738)보다 36% 낮고, 이 차이가 설비를 외운 효과이다.
-- 예측 구간(10/30/60분)과 라벨(전압고조파)을 바꿔도 학습에 없던 설비에서 LightGBM이 규칙보다 높았다. 묶음 20개 중 19개에서 우세했다.
-- 선행 연구처럼 값을 먼저 예측하고 기준값으로 판정하면 PR-AUC 0.222로 규칙보다도 낮았다. 실제 값을 그대로 써도 0.323이 상한이라, 전환 자체를 직접 분류해야 한다.
-- 원시 60분 시계열을 직접 보는 작은 Transformer는 학습에 없던 설비 PR-AUC 0.416으로 특징 기반 LightGBM(0.470)보다 낮았다.
-- LightGBM 하이퍼파라미터를 평가 설비를 뺀 중첩 교차검증으로 고르면 학습에 없던 설비 PR-AUC는 0.480으로 기본 설정보다 2% 높은 데 그쳤다.
+- 압축만 받아 두던 설비종류 6종(322대)을 학습에 더하고 상별 고조파·하루 이력 특징 19개를 보강하자, 학습에 없던 펌프/일반모터 설비 PR-AUC가 0.472에서 0.638로 올랐다(설비 단위 95% 구간 차이 +0.007~+0.275). 10분, 60분 예측에서도 +0.17로 같았다. [model-comparison-v2.md](case-studies/model-comparison-v2.md)
+- 같은 조건에서 LightGBM(0.638)은 규칙(0.327)과 Logistic Regression(0.410)보다 확실히 높았고, Random Forest(0.645)와는 차이가 없었다. 2분 대기 경보로 사건 70.9%를 하루 오경보 2.5회로 잡았다.
+- 평가 대상을 7종으로 넓혀도 전체 종류 학습이 7종 모두에서 같은 종류만 학습보다 높았다(평균 0.497 → 0.593). 구간으로 확실한 것은 설비가 적거나 이상 있는 설비가 적은 가열로·펌프·공기압축기였다. [widen-evaluation.md](case-studies/widen-evaluation.md)
+- 이상 지속 기준을 3/10분으로 바꿔도 모델은 규칙보다 높았지만, 데이터 추가 효과는 5분 기준에서만 유의했다. 설비종류를 하나씩 빼도 0.60 이상이라 효과는 한 종류에 기대지 않았다. [event-duration.md](case-studies/event-duration.md), [leave-one-type-out.md](case-studies/leave-one-type-out.md)
+- 펌프만 학습한 기준 모델에서는 학습에 없던 설비 PR-AUC가 LightGBM 0.470, 규칙 0.327(무작위 0.039)이었다. 같은 설비의 뒤 기간 평가(0.738)보다 36% 낮고, 이 차이가 설비를 외운 효과이다.
+- 선행 연구처럼 값을 먼저 예측하고 기준값으로 판정하면 PR-AUC 0.222로 규칙보다도 낮았다(펌프만 학습 기준). 전환 자체를 직접 분류해야 한다.
 
 ## 데이터
 
@@ -235,6 +234,34 @@ LightGBM 예측을 특징별 기여로 나눴다. 마지막 이상 후 지난 �
 - 이득은 설비 수와 어떤 관계인가
 - 설비종류마다 처음 보는 설비 성능은 얼마인가
 
+### 15. 새 주 모델 기준 비교 다시 맞추기
+[case-studies/model-comparison-v2.md](case-studies/model-comparison-v2.md)
+
+규칙, Logistic Regression, Random Forest, LightGBM을 펌프+6종 학습, 특징 167개 조건에서 10/30/60분 예측으로 다시 비교하고, 처음 보는 설비 60대를 다시 뽑는 부트스트랩으로 95% 구간을 냈다. 다른 설비종류를 더한 효과는 세 구간 모두 +0.17로 유의했고, LightGBM과 Random Forest는 차이가 없었다. 새 설비 처음 며칠로 임계값만 다시 맞추는 방식은 경보 대기 시간을 바꾸는 것 이상의 이득이 없었다.
+
+핵심 질문:
+- 새 주 모델 조건에서도 트리 모델이 규칙과 LR보다 높은가
+- 다른 설비종류를 더한 효과가 설비 구성과 관계없이 유지되는가
+- 새 설비 임계값을 다시 맞추면 오경보가 줄어드는가
+
+### 16. 이상 지속 기준 비교
+[case-studies/event-duration.md](case-studies/event-duration.md)
+
+이상 발생 정의의 지속 기준 5분을 3분, 10분으로 바꿔 정답과 특징을 다시 만들고 평가했다. 세 기준 모두 LightGBM이 규칙보다 확실히 높았고, 성능과 데이터 추가 효과는 5분에서 가장 컸다(3분 +0.069, 5분 +0.167, 10분 +0.130).
+
+핵심 질문:
+- 지속 기준을 바꿔도 모델이 규칙보다 높은가
+- 데이터 추가 효과는 지속 기준에 얼마나 민감한가
+
+### 17. 설비종류 하나씩 빼기
+[case-studies/leave-one-type-out.md](case-studies/leave-one-type-out.md)
+
+6종 중 하나씩 빼고 학습해 처음 보는 펌프 설비 성능을 봤다. 어떤 종류를 빼도 0.601~0.651로 펌프만(0.472)보다 높았고, 공작기계(−0.037), 주조기(−0.027), 공기압축기(−0.022)의 기여가 컸다.
+
+핵심 질문:
+- 데이터 추가 효과가 특정 설비종류 하나에 기대는가
+- 어느 종류의 기여가 큰가
+
 ## 결과와 해석
 
 ![방식별 처음 보는 설비 PR-AUC](charts/approach_pr_auc.png)
@@ -261,7 +288,10 @@ LightGBM 예측을 특징별 기여로 나눴다. 마지막 이상 후 지난 �
 - Transformer는 GPU 없이 작은 모델(차원 64, 2층)을 최대 10 epoch만 학습했다. 6번 중 2번은 최대 epoch에 닿아, 더 큰 설정에서 결과가 달라질 수 있다.
 - 음수 유효전력 설비 4대(363, 406, 467, 548번)를 부호 반전할지 정하지 않았다.
 - 하이퍼파라미터 탐색은 무작위 21개만 봤다. 중첩 교차검증에서 개선 폭이 작아 더 넓게 찾지 않았다.
-- 다음 단계: 새 설비 초기 며칠로 임계값만 다시 맞추는 방식, 10분 예측용 짧은 창 특징
+- 다른 설비종류를 더한 효과는 5분 지속 기준에서만 95% 구간이 0을 넘었고(3분 +0.069, 10분 +0.130), 7종 중 압출기·주조기·열처리·공작기계는 방향만 같았다.
+- 새 설비 처음 며칠로 임계값을 다시 맞추는 방식은 효과가 없었다. 처음 보는 설비의 Validation이 설비당 중앙값 2.7일이라 7일 보정은 평가하지 못했다.
+- 비교 모델(LR, RF)은 16GB 메모리 때문에 학습 행을 150만 개로 줄였다.
+- 다음 단계: 공작기계를 다른 종류와 같은 양으로 줄여 양과 종류의 효과 가르기, 10분 예측용 짧은 창 특징
 
 ## 실행 방법
 
@@ -285,6 +315,11 @@ python scripts/13_value_forecast.py
 python scripts/14_transformer.py
 python scripts/15_tune.py
 python scripts/16_tune_nested.py
+python scripts/17_extra_facilities.py --src data/features_v2 --compare --save-scores --tag v2cmp
+python scripts/19_unit_bootstrap.py --scores data/results/extra_fac_v2cmp_scores.parquet --tag v2cmp
+python scripts/20_threshold_recal.py --scores data/results/extra_fac_v2cmp_scores.parquet --tag v2cmp
+python scripts/18_widen_eval.py --src data/features_v2 --save-scores --tag v2s
+python scripts/19_unit_bootstrap.py --scores data/results/widen_v2s_scores.parquet --by facility --tag v2s
 
 # 추가 실험: 설비별 z 특징, 예측 구간, 전압고조파 라벨
 python scripts/08_unit_split.py --norm --tag norm
@@ -342,7 +377,10 @@ sch_thesis/
 |   +-- 14_transformer.py  # Transformer 비교 모델
 |   +-- 15_tune.py         # LightGBM 하이퍼파라미터 탐색
 |   +-- 16_tune_nested.py  # 중첩 교차검증으로 튜닝 효과 확인
-|   +-- 17_extra_facilities.py # 다른 설비종류를 학습에 더한 평가, 경보 표, SHAP
+|   +-- 17_extra_facilities.py # 다른 설비종류를 학습에 더한 평가, 경보 표, SHAP (--compare로 LR·RF 비교)
+|   +-- 18_widen_eval.py   # 설비종류별 처음 보는 설비 평가
+|   +-- 19_unit_bootstrap.py # 설비 단위 부트스트랩 신뢰구간
+|   +-- 20_threshold_recal.py # 새 설비 처음 며칠 임계값 재보정
 |   +-- evaluate.py        # 06번 이후 공통 함수 (데이터 읽기, 임계값, 지표)
 +-- notebooks/
 |   +-- 01_presentation.ipynb # 발표용 표와 그래프 (결과 파일에서 읽음)
@@ -378,3 +416,4 @@ sch_thesis/
 | 2026-10-30 | 설비종류 8종 추가(zip 직접 읽기, 10종 461대), 설비종류별 점검, 6종을 학습에 더한 평가 | [extra-facilities.md](case-studies/extra-facilities.md), `[기능/전처리]`, `[기능/EDA]`, `[실험/모델]` |
 | 2026-10-31 | 설비종류 추가 효과 반복 검증(묶음 배정 5가지), 특징 19개 보강, 설비별 가중치 비교, 새 주 모델 경보·SHAP, 상별 측정 항목·설비 정보 추가 비교(효과 없음) | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md), `[기능/특징]`, `[실험/모델]` |
 | 2026-10-31 | 평가 대상을 7종으로 넓혀 설비종류별 처음 보는 설비 평가 | [widen-evaluation.md](case-studies/widen-evaluation.md), `[실험/모델]` |
+| 2026-11-01 | 새 주 모델 기준으로 규칙·LR·RF 비교(10/30/60분), 설비 단위 신뢰구간, 새 설비 임계값 재보정(효과 없음), 이상 지속 기준 3/10분, 설비종류 하나씩 빼기, 7종 신뢰구간 | [model-comparison-v2.md](case-studies/model-comparison-v2.md), [event-duration.md](case-studies/event-duration.md), [leave-one-type-out.md](case-studies/leave-one-type-out.md), [widen-evaluation.md](case-studies/widen-evaluation.md), `[기능/실험]`, `[기능/평가]`, `[실험/모델]` |
