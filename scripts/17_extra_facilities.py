@@ -4,12 +4,18 @@
 # 평가 틀은 08번과 같음(펌프 설비 5묶음, 묶음 설비의 Validation 기간). 학습 데이터만 "펌프" 대 "펌프 + 다른 설비종류 Training"
 # 조기 종료와 임계값은 두 모델 모두 펌프 학습 설비의 뒤 20%로 고정해, 차이가 학습 데이터에서만 나오게 함
 #
-# 사용법: python scripts/17_extra_facilities.py [--types 3.공기압축기 ...] [--neg-frac 0.2] [--seed 1] [--type-feature] [--only-extra] [--tag 이름]
+# 사용법: python scripts/17_extra_facilities.py [--types 3.공기압축기 ...] [--neg-frac 0.2] [--seed 1] [--type-feature] [--only-extra]
+#         [--compare] [--save-scores] [--tag 이름]
 import argparse, glob, os
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 from evaluate import (FEATURES_DIR, HIST, LGBM_PARAMS, RESULTS_DIR, TARGET, add_history_flag, alarm_metrics,
                       best_threshold, clean, feature_columns, load, split_fit_calib, sustained)
@@ -82,6 +88,33 @@ def fit_lgbm(fit, cal, feats, target, weight=None):
         callbacks=[lgb.early_stopping(100, verbose=False)])
 
 
+COMPARE_MAX_ROWS = 1_500_000
+
+
+def compare_sample(d, target, w, seed=0):
+    # LR·RF는 표준화·대치 단계에서 float64 사본을 만들어, 펌프+6종 전체(수백만 행 × 167)를 넣을 경우 16GB에서 메모리가 모자라는 문제 있음
+    # 양성은 전부 두고 음성만 더 줄인 뒤 가중치로 되돌림
+    neg = (d[target] == 0).to_numpy()
+    frac = min(1.0, max(COMPARE_MAX_ROWS - int((~neg).sum()), 1) / max(int(neg.sum()), 1))
+    keep = ~neg | (np.random.default_rng(seed).random(len(d)) < frac)
+    return d[keep], np.where(neg[keep], w[keep] / frac, w[keep])
+
+
+def fit_compare(fit, feats, target, w):
+    # 06·07번과 같은 설정. 펌프+추가 데이터로 학습해 LightGBM과 같은 조건에서 비교
+    sub, sw = compare_sample(fit, target, w)
+    X, y = clean(sub[feats]), sub[target].to_numpy()
+    lr = make_pipeline(SimpleImputer(strategy="median"), StandardScaler(),
+                       LogisticRegression(class_weight="balanced", max_iter=2000))
+    lr.fit(X, y, logisticregression__sample_weight=sw)
+    # 트리마다 학습 행의 10%만 씀. 전체 행으로 키울 경우, 4코어에서 한 시간 넘게 걸리는 문제 있음
+    rf = make_pipeline(SimpleImputer(strategy="median"),
+                       RandomForestClassifier(n_estimators=200, max_samples=0.1, min_samples_leaf=20,
+                                              class_weight="balanced_subsample", n_jobs=-1, random_state=0))
+    rf.fit(X, y, randomforestclassifier__sample_weight=sw)
+    return {"Logistic Regression 펌프+추가": lr, "Random Forest 펌프+추가": rf}
+
+
 def main():
     p = argparse.ArgumentParser(description="다른 설비종류를 학습에 더한 처음 보는 펌프 설비 평가")
     p.add_argument("--src", default=FEATURES_DIR)
@@ -94,6 +127,8 @@ def main():
     p.add_argument("--meta", action="store_true", help="설비 정보(정격 용량·전압, 제작 연도, 계약전력) 특징 추가")
     p.add_argument("--dev-balance", action="store_true", help="설비마다 양성 가중치 합을 맞춤")
     p.add_argument("--only-extra", action="store_true", help="펌프만 모델을 건너뜀 (민감도 확인용)")
+    p.add_argument("--compare", action="store_true", help="Logistic Regression, Random Forest도 펌프+추가 데이터로 학습해 비교")
+    p.add_argument("--save-scores", action="store_true", help="처음 보는 설비 행 단위 점수와 경보를 저장 (신뢰구간, 임계값 재보정용)")
     p.add_argument("--shap", action="store_true", help="묶음마다 처음 보는 설비에서 펌프+추가 모델의 SHAP 기여도를 모음")
     p.add_argument("--tag", default="")
     args = p.parse_args()
@@ -113,7 +148,7 @@ def main():
     folds = assign_folds(tr, target, args.seed)
     tr_fold, va_fold = tr["dev"].map(folds), va["dev"].map(folds)
 
-    pooled, fold_rows, shap_parts = {}, [], []
+    pooled, fold_rows, shap_parts, thr_rows = {}, [], [], []
     for k in range(N_FOLDS):
         fit_p, cal_p = split_fit_calib(tr[tr_fold != k])
         fit_x, _ = split_fit_calib(ex)
@@ -132,6 +167,8 @@ def main():
         if args.dev_balance:
             w_b = dev_balance(both, target, w_b)
         models["LightGBM 펌프+추가"] = fit_lgbm(both, cal_p, feats, target, w_b)
+        if args.compare:
+            models.update(fit_compare(both, feats, target, both["_w"].to_numpy()))
         y = te[target].to_numpy()
         for name, m in models.items():
             if m is None:
@@ -140,6 +177,7 @@ def main():
                 s_te, s_cal = m.predict_proba(clean(te[feats]))[:, 1], m.predict_proba(clean(cal_p[feats]))[:, 1]
             thr = best_threshold(cal_p[target].to_numpy(), s_cal)
             pooled.setdefault(name, []).append((s_te, s_te >= thr))
+            thr_rows.append(dict(fold=k, model=name, threshold=float(thr)))
             fold_rows.append(dict(fold=k, model=name, units=te["dev"].nunique(), positives=int(y.sum()),
                                   pr_auc=average_precision_score(y, s_te)))
         if args.shap:
@@ -167,6 +205,18 @@ def main():
         for n in WAIT_MINUTES:
             alarm_rows.append(dict(model=name, wait_min=n, **alarm_metrics(va_sorted, sustained(va_sorted, raw, n), target)))
     pd.DataFrame(alarm_rows).to_csv(prefix + "_alarm.csv", index=False, encoding="utf-8-sig")
+
+    if args.save_scores:
+        # 행 순서는 va_sorted와 같음. 임계값은 묶음마다 펌프 학습 설비 뒤 20%에서 고른 값
+        sc = pd.DataFrame({"time": va_sorted.index, "dev": va_sorted["dev"].to_numpy(),
+                           "fold": va_sorted["dev"].map(folds).to_numpy(), target: y_all,
+                           "minutes_to_event": va_sorted["minutes_to_event"].to_numpy()})
+        for i, (name, parts) in enumerate(pooled.items()):
+            sc[f"score_{i}"] = np.concatenate([x[0] for x in parts]).astype("float32")
+        sc.to_parquet(prefix + "_scores.parquet", index=False)
+        names = pd.DataFrame({"column": [f"score_{i}" for i in range(len(pooled))], "model": list(pooled)})
+        thr = pd.DataFrame(thr_rows).merge(names, on="model")
+        thr.to_csv(prefix + "_thresholds.csv", index=False, encoding="utf-8-sig")
 
     if shap_parts:
         feats = shap_parts[0][0]

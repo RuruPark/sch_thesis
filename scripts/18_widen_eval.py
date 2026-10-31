@@ -59,6 +59,7 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--meta", action="store_true", help="설비 정보 특징 추가 (17번 --meta와 같음)")
     p.add_argument("--only-pooled", action="store_true", help="같은 종류만 학습한 모델을 건너뜀")
+    p.add_argument("--save-scores", action="store_true", help="설비종류별 처음 보는 설비 행 단위 점수 저장 (신뢰구간용)")
     p.add_argument("--tag", default="")
     args = p.parse_args()
     os.makedirs(args.dst, exist_ok=True)
@@ -78,7 +79,7 @@ def main():
     rank = tr.groupby(["facility", "dev"]).cumcount() / tr.groupby(["facility", "dev"])["dev"].transform("size")
     fit_mask = (rank < 0.8).to_numpy()  # split_fit_calib과 같은 기준
 
-    metric_rows, fold_rows, alarm_rows = [], [], []
+    metric_rows, fold_rows, alarm_rows, score_parts = [], [], [], []
     for t in [t for t in args.eval_types if t in types]:
         va = load_split(args.src, "Validation", t, target, 1.0, rng)
         if args.meta:
@@ -115,6 +116,17 @@ def main():
                                       pr_auc=average_precision_score(y, s_te) if y.sum() else np.nan))
             print(f"{t} 묶음 {k}: " + ", ".join(f"{r['model']} {r['pr_auc']:.3f}" for r in fold_rows[-len(models):]))
 
+        if args.save_scores and pooled:
+            ks = [k for k, _, _ in next(iter(pooled.values()))]
+            te_all = pd.concat([va[va_fold == k] for k in ks])
+            sc = pd.DataFrame({"facility": t, "time": te_all.index, "dev": te_all["dev"].to_numpy(),
+                               "fold": te_all["dev"].map(folds[t]).to_numpy(), target: te_all[target].to_numpy(),
+                               "minutes_to_event": te_all["minutes_to_event"].to_numpy()})
+            for name, parts in pooled.items():
+                sc[name] = np.concatenate([x[1] for x in parts]).astype("float32")
+            score_parts.append(sc)
+            # 열 이름에 한글 모델명을 그대로 씀. 종류마다 모델 수가 같아 concat해도 열이 맞음
+            pd.concat(score_parts).to_parquet(prefix + "_scores.parquet", index=False)
         for name, parts in pooled.items():
             te_all = pd.concat([va[va_fold == k] for k, _, _ in parts])
             y_all = te_all[target].to_numpy()
