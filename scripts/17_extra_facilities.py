@@ -21,6 +21,20 @@ WAIT_MINUTES = [1, 2, 3, 5, 10]  # 09번과 같은 대기 시간
 EXTRA_TYPES = ["3.공기압축기", "4.공작기계", "6.가열로", "7.압출기", "9.주조기", "10.열처리"]
 
 
+META_COLS = {"facility_capacity": "정격용량", "facility_volt": "정격전압", "facility_year": "제작연도",
+             "CONTRACT_POWER": "계약전력"}
+
+
+def add_meta(ds, meta_path):
+    # 처음 보는 설비에서 "어떤 급의 설비인지"를 알려 주려는 값. 같은 전류라도 설비 크기에 따라 의미가 달라서 정격 대비 부하도 같이 줌
+    m = pd.read_csv(meta_path).drop_duplicates("dev").set_index("dev")[list(META_COLS)].rename(columns=META_COLS)
+    m = m.astype("float32")
+    for d in ds:
+        for c in m.columns:
+            d[c] = d["dev"].map(m[c]).astype("float32")
+        d["부하_정격비"] = (d["유효전력평균"] / d["정격용량"].where(d["정격용량"] > 0)).astype("float32")
+
+
 def assign_folds(tr, target, seed=0):
     # seed 0은 08번과 같은 배정. 다른 seed는 양성 수 순서 5대씩 묶음 안에서만 묶음 번호를 섞어, 묶음마다 양성 수가 고르게 남게 함
     pos = tr.groupby("dev")[target].sum().sort_values(ascending=False, kind="stable")
@@ -77,6 +91,7 @@ def main():
     p.add_argument("--neg-frac", type=float, default=0.2)
     p.add_argument("--seed", type=int, default=0, help="묶음 배정 시드. 0은 08번과 같은 배정")
     p.add_argument("--type-feature", action="store_true", help="설비종류 번호를 특징으로 추가")
+    p.add_argument("--meta", action="store_true", help="설비 정보(정격 용량·전압, 제작 연도, 계약전력) 특징 추가")
     p.add_argument("--dev-balance", action="store_true", help="설비마다 양성 가중치 합을 맞춤")
     p.add_argument("--only-extra", action="store_true", help="펌프만 모델을 건너뜀 (민감도 확인용)")
     p.add_argument("--shap", action="store_true", help="묶음마다 처음 보는 설비에서 펌프+추가 모델의 SHAP 기여도를 모음")
@@ -90,6 +105,8 @@ def main():
     ex = load_extra(args.src, args.types, target, args.neg_frac)
     print(f"펌프 Training {len(tr):,}행, Validation {len(va):,}행 / 추가 {ex['facility'].nunique()}종 "
           f"{ex['dev'].nunique()}대 {len(ex):,}행(양성 {int(ex[target].sum()):,})")
+    if args.meta:
+        add_meta((tr, va, ex), os.path.join(os.path.dirname(os.path.abspath(args.src)), "processed", "meta.csv"))
     if args.type_feature:
         for d in (tr, va, ex):
             d["설비종류"] = d["facility"].str.split(".").str[0].astype("float32")
@@ -139,7 +156,7 @@ def main():
         s = np.concatenate([x[0] for x in parts])
         alarm = np.concatenate([x[1] for x in parts])
         rows.append(dict(model=name, types=" ".join(args.types), neg_frac=args.neg_frac, seed=args.seed,
-                         type_feature=args.type_feature, dev_balance=args.dev_balance, src=os.path.basename(args.src.rstrip("/\\")),
+                         type_feature=args.type_feature, dev_balance=args.dev_balance, meta=args.meta, src=os.path.basename(args.src.rstrip("/\\")),
                          pr_auc=average_precision_score(y_all, s), **alarm_metrics(va_sorted, alarm, target)))
     res = pd.DataFrame(rows)
     res.to_csv(prefix + "_metrics.csv", index=False, encoding="utf-8-sig")
