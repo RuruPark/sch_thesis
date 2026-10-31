@@ -4,7 +4,7 @@
 # 처음 보는 설비 하루 오경보가 같은 설비 평가의 두 배 넘게 나옴. 임계값을 학습 설비 점수 분포로 고른 탓에 새 설비 분포와 어긋나는 문제 있음
 # 모델은 다시 학습하지 않음. 설비마다 Validation 앞 N일을 보정 기간으로 쓰고, 지표는 모든 방식을 그 뒤 기간에서만 계산
 #
-# 사용법: python scripts/20_threshold_recal.py --scores data/results/extra_fac_v2cmp_scores.parquet [--days 1 3 7] [--tag v2cmp]
+# 사용법: python scripts/20_threshold_recal.py --scores data/results/extra_fac_v2cmp_scores.parquet [--days 1 2 3] [--tag v2cmp]
 import argparse, os
 import numpy as np
 import pandas as pd
@@ -44,7 +44,7 @@ def main():
     p = argparse.ArgumentParser(description="새 설비 처음 며칠로 임계값 재보정")
     p.add_argument("--scores", required=True)
     p.add_argument("--target", default=TARGET)
-    p.add_argument("--days", type=float, nargs="*", default=[1, 3, 7])
+    p.add_argument("--days", type=float, nargs="*", default=[1, 2, 3])
     p.add_argument("--models", nargs="*", default=MODELS)
     p.add_argument("--dst", default=RESULTS_DIR)
     p.add_argument("--tag", default="")
@@ -62,6 +62,10 @@ def main():
         for days in args.days:
             thr, calib = unit_thresholds(sc, col, base, days, QUANTILES, args.target)
             ev = sc[~calib].set_index("time")
+            # Validation이 설비당 최대 6일(중앙값 2.7일)이라 보정 기간을 길게 잡을 경우, 평가할 행이 남지 않는 문제 있음
+            if ev.empty:
+                print(f"{model} {days}일: 보정 기간 뒤 평가 행이 없어 건너뜀")
+                continue
             s = sc[col].to_numpy()[~calib]
             for name, v in thr.items():
                 raw = s >= v[~calib]
