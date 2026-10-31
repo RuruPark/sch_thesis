@@ -3,7 +3,7 @@
 # 입력: data/cleaned  출력: data/target/<split>/<설비종류>/<번호>.parquet, data/target/target_summary.csv
 # 기준 근거는 docs/problem-definition.md
 #
-# 사용법: python scripts/04_make_target.py [--soh label_SOH_전압고조파평균 --dst data/target_vh]
+# 사용법: python scripts/04_make_target.py [--soh label_SOH_전압고조파평균 --dst data/target_vh] [--min-event 3 --dst data/target_d3]
 import argparse, glob, os
 import numpy as np
 import pandas as pd
@@ -21,14 +21,14 @@ def run_lengths(flag):
     return run_id, flag.groupby(run_id).transform("size")
 
 
-def make_target(d, soh=SOH):
+def make_target(d, soh=SOH, min_event=MIN_EVENT_MIN):
     out = pd.DataFrame(index=d.index)
     # 전류 > 0으로 자를 경우, Stop 상태의 대기 전류(중앙값 2.1A) 구간이 섞여 고조파 '주의'가 부풀려지는 문제 있음
     running = d[STATE].notna() & (d[STATE] != "Stop") & (d["flag_power_off"] == 0)
     abnormal = running & d[soh].isin(["주의", "경고"])
     run_id, run_len = run_lengths(abnormal)
     is_start = abnormal & (run_id != run_id.shift())
-    event_start = is_start & (run_len >= MIN_EVENT_MIN)
+    event_start = is_start & (run_len >= min_event)
 
     out["is_running"] = running.astype("int8")
     out["is_abnormal"] = abnormal.astype("int8")
@@ -56,6 +56,8 @@ def main():
     p.add_argument("--dst", default=os.path.join(PROJECT_ROOT, "data", "target"))
     # 전압고조파 보조 실험용. 기본은 전류고조파
     p.add_argument("--soh", default=SOH)
+    # 지속 기준 민감도 실험용. 기본 5분
+    p.add_argument("--min-event", type=int, default=MIN_EVENT_MIN)
     args = p.parse_args()
     src, dst = os.path.abspath(args.src), os.path.abspath(args.dst)
 
@@ -63,7 +65,7 @@ def main():
     for f in sorted(glob.glob(os.path.join(src, "*", "*", "*.parquet"))):
         rel = os.path.relpath(f, src)
         split, facility = rel.split(os.sep)[:2]
-        out = make_target(pd.read_parquet(f), args.soh)
+        out = make_target(pd.read_parquet(f), args.soh, args.min_event)
         path = os.path.join(dst, rel)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         out.to_parquet(path)
