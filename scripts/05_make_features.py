@@ -4,6 +4,7 @@
 # 모든 특징은 그 시점까지의 값만 씀. 미래 값을 섞을 경우, 검증 성능이 실제보다 높게 나오는 문제 있음
 #
 # --extra: 상별 고조파, 경계 근접, 하루 이력, 고조파 전류 특징 추가 (data/features_v2용, case-studies/feature-extension.md)
+# --phase: 상별 전류·전력·역률·전압고조파의 최대/최소 상, 상전압·선간전압 불균형, 누적전력량 증가분 추가 (data/features_v3용)
 #
 # 사용법: python scripts/05_make_features.py [--target data/target_vh --dst data/features_vh] [--extra --dst data/features_v2]
 import argparse, glob, os
@@ -56,7 +57,27 @@ def extra_features(d, t, s):
     return pd.DataFrame(f, index=d.index)
 
 
-def make_features(d, t, extra=False):
+PHASE_ITEMS = ["전류", "유효전력", "무효전력", "역률", "전압고조파"]
+
+
+def phase_features(d):
+    # 지금 특징은 상 평균 중심이라 한 상만 틀어지는 경우를 못 봄. 원본 35개 항목 중 안 쓰던 상별 값을 상 사이 최대·최소로 요약
+    f = {}
+    for item in PHASE_ITEMS:
+        x = d[[f"{p}상{item}" for p in "RST"]].astype("float32")
+        hi, lo = x.max(axis=1), x.min(axis=1)
+        f[f"{item}_최대상"], f[f"{item}_최소상"] = hi, lo
+        f[f"{item}_상차"] = hi - lo
+        f[f"{item}_상차_mean60"] = (hi - lo).rolling(60, min_periods=30).mean()
+    f["상전압불균형"] = imbalance(d, "전압")
+    f["선간전압불균형"] = imbalance(d, "선간전압")
+    # 누적전력량은 설비마다 시작값이 달라 그대로 쓸 수 없어서 60분 증가분만 씀. 음수는 계량기 초기화로 보고 비움
+    e = d["누적전력량"].astype("float32").diff(60)
+    f["전력량_diff60"] = e.where(e >= 0)
+    return pd.DataFrame(f, index=d.index)
+
+
+def make_features(d, t, extra=False, phase=False):
     s = d[BASE].astype("float32").copy()
     s["전류불균형"] = imbalance(d, "전류")
     s["전류고조파불균형"] = imbalance(d, "전류고조파")
@@ -72,6 +93,8 @@ def make_features(d, t, extra=False):
     f = pd.DataFrame(feats, index=d.index)
     if extra:
         f = pd.concat([f, extra_features(d, t, s)], axis=1)
+    if phase:
+        f = pd.concat([f, phase_features(d)], axis=1)
 
     abn = t["is_abnormal"].astype("float32")
     f["이상비율_60"] = abn.rolling(60, min_periods=30).mean()
@@ -96,6 +119,7 @@ def main():
     p.add_argument("--target", default=os.path.join(PROJECT_ROOT, "data", "target"))
     p.add_argument("--dst", default=os.path.join(PROJECT_ROOT, "data", "features"))
     p.add_argument("--extra", action="store_true", help="보강 특징 추가")
+    p.add_argument("--phase", action="store_true", help="상별 측정 항목 특징 추가")
     args = p.parse_args()
     os.makedirs(args.dst, exist_ok=True)
 
@@ -104,7 +128,7 @@ def main():
     for f in sorted(glob.glob(os.path.join(args.target, "*", "*", "*.parquet"))):
         rel = os.path.relpath(f, args.target)
         split, facility = rel.split(os.sep)[:2]
-        out = make_features(pd.read_parquet(os.path.join(args.clean, rel)), pd.read_parquet(f), args.extra)
+        out = make_features(pd.read_parquet(os.path.join(args.clean, rel)), pd.read_parquet(f), args.extra, args.phase)
         out.insert(0, "dev", int(os.path.basename(f)[:-8]))
         out.insert(1, "facility", facility)
         path = os.path.join(args.dst, rel)
