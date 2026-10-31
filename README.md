@@ -10,7 +10,8 @@
 
 ## 핵심 결과
 
-- 학습에 없던 설비에서 30분 내 이상 발생 예측 PR-AUC는 LightGBM 0.470, 전류고조파 임계값 규칙 0.327(무작위 0.039)이었다. 같은 설비의 뒤 기간 평가(0.738)보다 36% 낮고, 이 차이가 설비를 외운 효과이다.
+- 압축만 받아 두던 설비종류 6종(322대)을 학습에 더하고 상별 고조파·하루 이력 특징 19개를 보강하자, 학습에 없던 펌프/일반모터 설비 PR-AUC가 0.484에서 0.636으로 올랐다(묶음 배정 5가지 평균). 2분 대기 경보로 사건 70.9%를 하루 오경보 2.5회로 잡았다. [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md)
+- 펌프만 학습한 기준 모델에서는 학습에 없던 설비에서 30분 내 이상 발생 예측 PR-AUC가 LightGBM 0.470, 전류고조파 임계값 규칙 0.327(무작위 0.039)이었다. 같은 설비의 뒤 기간 평가(0.738)보다 36% 낮고, 이 차이가 설비를 외운 효과이다.
 - 예측 구간(10/30/60분)과 라벨(전압고조파)을 바꿔도 학습에 없던 설비에서 LightGBM이 규칙보다 높았다. 묶음 20개 중 19개에서 우세했다.
 - 선행 연구처럼 값을 먼저 예측하고 기준값으로 판정하면 PR-AUC 0.222로 규칙보다도 낮았다. 실제 값을 그대로 써도 0.323이 상한이라, 전환 자체를 직접 분류해야 한다.
 - 원시 60분 시계열을 직접 보는 작은 Transformer는 학습에 없던 설비 PR-AUC 0.416으로 특징 기반 LightGBM(0.470)보다 낮았다.
@@ -213,6 +214,16 @@ LightGBM 예측을 특징별 기여로 나눴다. 마지막 이상 후 지난 �
 - 학습 설비를 늘리면 처음 보는 펌프 설비 성능이 오르는가
 - 개선이 설비 묶음과 관계없이 나타나는가
 
+### 13. 특징 보강
+[case-studies/feature-extension.md](case-studies/feature-extension.md)
+
+상별 최대 전류고조파, 경계 30까지 거리와 접근 속도, 하루 이상 비율, 고조파 전류 등 19개를 더했다. 펌프 + 6종 학습에서 처음 보는 펌프 설비 PR-AUC가 묶음 배정 5가지 평균 0.607에서 0.636으로, 하루 오경보가 5.0~6.5회로 줄었다. 설비별 양성 가중치를 맞추는 방식은 PR-AUC가 내려 쓰지 않았다.
+
+핵심 질문:
+- 라벨 경계와 상별 고조파를 직접 주면 오르는가
+- 처음 보는 설비에서 짧은 이력 대신 하루 이력이 도움이 되는가
+- 새 주 모델은 무엇을 보고 경보를 내는가
+
 ## 결과와 해석
 
 ![방식별 처음 보는 설비 PR-AUC](charts/approach_pr_auc.png)
@@ -309,7 +320,7 @@ sch_thesis/
 |   +-- 02b_eda_facility.py # 설비종류별 라벨 경계·품질 점검
 |   +-- 03_clean.py        # 2차 전처리
 |   +-- 04_make_target.py  # 30분 내 이상 발생 정답 라벨
-|   +-- 05_make_features.py # 모델 입력 특징 148개
+|   +-- 05_make_features.py # 모델 입력 특징 148개 (--extra로 보강 19개 추가)
 |   +-- 06_baseline.py     # 베이스라인 비교
 |   +-- 07_model_compare.py # Random Forest, LightGBM 비교
 |   +-- 08_unit_split.py   # 설비 단위 5묶음 분할 평가 (예측 구간, z 특징, 라벨 바꿔 반복)
@@ -320,7 +331,7 @@ sch_thesis/
 |   +-- 14_transformer.py  # Transformer 비교 모델
 |   +-- 15_tune.py         # LightGBM 하이퍼파라미터 탐색
 |   +-- 16_tune_nested.py  # 중첩 교차검증으로 튜닝 효과 확인
-|   +-- 17_extra_facilities.py # 다른 설비종류를 학습에 더한 평가
+|   +-- 17_extra_facilities.py # 다른 설비종류를 학습에 더한 평가, 경보 표, SHAP
 |   +-- evaluate.py        # 06번 이후 공통 함수 (데이터 읽기, 임계값, 지표)
 +-- notebooks/
 |   +-- 01_presentation.ipynb # 발표용 표와 그래프 (결과 파일에서 읽음)
@@ -354,3 +365,4 @@ sch_thesis/
 | 2026-10-13 | 선행 연구 방식(값 예측 후 판정) 재현, Transformer 비교 | [value-forecast.md](case-studies/value-forecast.md), [transformer.md](case-studies/transformer.md) |
 | 2026-10-19 | 발표용 표·그래프 노트북, LightGBM 하이퍼파라미터 탐색과 중첩 교차검증 | [tuning.md](case-studies/tuning.md), `[실험/모델]` |
 | 2026-10-30 | 설비종류 8종 추가(zip 직접 읽기, 10종 461대), 설비종류별 점검, 6종을 학습에 더한 평가 | [extra-facilities.md](case-studies/extra-facilities.md), `[기능/전처리]`, `[기능/EDA]`, `[실험/모델]` |
+| 2026-10-31 | 설비종류 추가 효과 반복 검증(묶음 배정 5가지), 특징 19개 보강, 설비별 가중치 비교, 새 주 모델 경보·SHAP | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md), `[기능/특징]`, `[실험/모델]` |
