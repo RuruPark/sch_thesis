@@ -268,11 +268,15 @@ LightGBM 예측을 특징별 기여로 나눴다. 마지막 이상 후 지난 �
 
 처음 보는 설비(주황)에서도 LightGBM이 가장 높았고, 선행 연구 방식(값 예측 후 판정)은 규칙보다 낮았다. 모든 방법이 학습에 그 설비를 뺐을 때 성능이 떨어졌다. 규칙은 학습이 없어 두 막대가 같다.
 
-![예측 구간별 처음 보는 설비 PR-AUC](charts/horizon_pr_auc.png)
+![예측 시간별 PR-AUC와 95% 구간](charts/thesis_fig2_horizon.png)
 
-예측 구간을 10분, 60분으로 바꿔도 처음 보는 설비에서 LightGBM이 규칙보다 높았다. 구간이 짧을수록 차이가 컸다.
+펌프+6종으로 학습한 트리 모델(파랑 LightGBM, 보라 RF)이 10/30/60분 모두 규칙과 LR보다 높았다. 세로 막대는 처음 보는 펌프 설비 60대를 다시 뽑은 95% 구간이다.
 
-![경보 대기 시간별 오경보와 사건 재현율](charts/alarm_rule_tradeoff.png)
+![데이터 추가 효과와 95% 구간](charts/thesis_fig3_gain_forest.png)
+
+다른 설비종류를 함께 학습한 효과는 예측 시간과 관계없이 +0.17이었다. 이상 지속 기준을 3/10분으로 바꾸면 방향은 같지만 구간이 0을 포함했다.
+
+![경보 대기 시간별 사건 재현율과 오경보](charts/thesis_fig8_alarm_wait.png)
 
 같은 오경보 수준에서 LightGBM이 규칙보다 많은 사건을 미리 잡았다. 대기 시간은 현장이 오경보와 놓친 사건 중 무엇을 더 꺼리는지에 따라 고른다.
 
@@ -320,6 +324,7 @@ python scripts/19_unit_bootstrap.py --scores data/results/extra_fac_v2cmp_scores
 python scripts/20_threshold_recal.py --scores data/results/extra_fac_v2cmp_scores.parquet --tag v2cmp
 python scripts/18_widen_eval.py --src data/features_v2 --save-scores --tag v2s
 python scripts/19_unit_bootstrap.py --scores data/results/widen_v2s_scores.parquet --by facility --tag v2s
+python scripts/21_thesis_figures.py   # 논문용 그림 charts/thesis_fig*.png(300dpi), .pdf
 
 # 추가 실험: 설비별 z 특징, 예측 구간, 전압고조파 라벨
 python scripts/08_unit_split.py --norm --tag norm
@@ -381,6 +386,7 @@ sch_thesis/
 |   +-- 18_widen_eval.py   # 설비종류별 처음 보는 설비 평가
 |   +-- 19_unit_bootstrap.py # 설비 단위 부트스트랩 신뢰구간
 |   +-- 20_threshold_recal.py # 새 설비 처음 며칠 임계값 재보정
+|   +-- 21_thesis_figures.py # 논문용 그림 (300dpi png, pdf)
 |   +-- evaluate.py        # 06번 이후 공통 함수 (데이터 읽기, 임계값, 지표)
 +-- notebooks/
 |   +-- 01_presentation.ipynb # 발표용 표와 그래프 (결과 파일에서 읽음)
@@ -417,3 +423,4 @@ sch_thesis/
 | 2026-10-31 | 설비종류 추가 효과 반복 검증(묶음 배정 5가지), 특징 19개 보강, 설비별 가중치 비교, 새 주 모델 경보·SHAP, 상별 측정 항목·설비 정보 추가 비교(효과 없음) | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md), `[기능/특징]`, `[실험/모델]` |
 | 2026-10-31 | 평가 대상을 7종으로 넓혀 설비종류별 처음 보는 설비 평가 | [widen-evaluation.md](case-studies/widen-evaluation.md), `[실험/모델]` |
 | 2026-11-01 | 새 주 모델 기준으로 규칙·LR·RF 비교(10/30/60분), 설비 단위 신뢰구간, 새 설비 임계값 재보정(효과 없음), 이상 지속 기준 3/10분, 설비종류 하나씩 빼기, 7종 신뢰구간 | [model-comparison-v2.md](case-studies/model-comparison-v2.md), [event-duration.md](case-studies/event-duration.md), [leave-one-type-out.md](case-studies/leave-one-type-out.md), [widen-evaluation.md](case-studies/widen-evaluation.md), `[기능/실험]`, `[기능/평가]`, `[실험/모델]` |
+| 2026-11-01 | 추가 실험 결과로 논문용 그림 8개 생성(300dpi png, pdf) | [charts/](charts/), `[기능/시각화]` |
