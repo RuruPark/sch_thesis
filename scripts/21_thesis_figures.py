@@ -110,7 +110,8 @@ def fig3_gain_forest(dpi):
         c = BLUE if lo > 0 else MUTED
         ax.hlines(i, lo, hi, color=c, lw=2)
         ax.scatter(d, i, s=40, color=c, zorder=3, edgecolor="white", linewidth=1.2)
-        ax.text(0.33, i, f"+{d:.3f}  [{lo:.3f}, {hi:.3f}]  p={p:.3f}", va="center", fontsize=8, color=INK)
+        # p_b_better는 부트스트랩 1,000번 중 B가 높았던 비율. "p="로 적을 경우, p값으로 오해받는 문제 있어 이름을 바꿈
+        ax.text(0.33, i, f"{d:+.3f}  [{lo:.3f}, {hi:.3f}]  개선 비율 {p:.0%}", va="center", fontsize=8, color=INK)
     ax.axvline(0, color=MUTED, lw=1)
     ax.set_yticks(range(len(rows)), [r[0] for r in rows[::-1]])
     ax.set_xlim(-0.1, 0.32)
@@ -169,7 +170,7 @@ def fig5_by_facility(dpi):
         c = BLUE if lo > 0 else MUTED
         a2.hlines(i, lo, hi, color=c, lw=2)
         a2.scatter(d, i, s=36, color=c, zorder=3, edgecolor="white", linewidth=1.2)
-        a2.text(0.28, i, f"p={p:.3f}", va="center", fontsize=8, color=INK)
+        a2.text(0.28, i, f"개선 비율 {p:.0%}", va="center", fontsize=8, color=INK)
     a2.axvline(0, color=MUTED, lw=1)
     a2.set_xlim(-0.1, 0.33)
     a2.set_xlabel("PR-AUC 증가 (같은 종류만 → 전체 종류)")
