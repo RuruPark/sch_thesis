@@ -217,7 +217,6 @@ python scripts/10_charts.py
 ```text
 sch_thesis/
 +-- README.md
-+-- CLAUDE.md              # Claude 작업 지침
 +-- case-studies/
 |   +-- baseline-comparison.md # 규칙 vs Logistic Regression
 |   +-- model-comparison.md # Random Forest, LightGBM 비교

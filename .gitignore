@@ -11,3 +11,6 @@ venv/
 .idea/
 Thumbs.db
 .DS_Store
+
+# 작업 지침은 로컬에만 둠
+CLAUDE.md

@@ -262,7 +262,6 @@ def remove_outliers(df, col):
 ```text
 sch_thesis/
 +-- README.md              # 목차: 연구 질문, 핵심 결과, 실험 링크
-+-- CLAUDE.md              # Claude 작업 지침 (이 문서를 불러옴)
 +-- case-studies/          # 실험별 기록 (문제 → 실험 → 결과 → 판단)
 +-- docs/
 |   +-- CONVENTIONS.md     # 이 문서
