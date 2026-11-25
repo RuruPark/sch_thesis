@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # 추가 실험(17/18/19/20번) 결과로 논문용 그림을 만듦
 # 입력: data/results/boot_*.csv, extra_fac_*_metrics.csv, recal_v2cmp.csv, extra_fac_v2cmp_folds.csv
+# 10/60분 예측, 이상 지속 3/10분, 설비종류 빼기 결과(boot_v2cmp_h10/h60, boot_v2_d3/d10, extra_fac_v2_lo_*)는 README 실행 방법의 추가 명령으로 만듦
 # 출력: charts/thesis_fig*.png(300dpi), 같은 이름의 .pdf(벡터, 논문 본문용)
 #
 # 사용법: python scripts/21_thesis_figures.py [--dpi 300]
