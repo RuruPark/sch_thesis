@@ -100,11 +100,11 @@ def main():
     try:
         import pyarrow  # noqa: F401
     except ImportError:
-        raise SystemExit("pyarrow 가 없습니다. 먼저 'pip install pyarrow' 를 실행해 주세요.")
+        raise SystemExit("pyarrow 없음: pip install pyarrow")
     raw_dir, out_root = os.path.abspath(args.raw_dir), os.path.abspath(args.out_dir)
     if not any(os.path.isdir(os.path.join(raw_dir, s)) for s in SPLITS):
-        raise SystemExit(f"원본 데이터 폴더에 Training/ 또는 Validation/ 이 없습니다: {raw_dir}\n"
-                         "--raw-dir 또는 환경변수 THESIS_RAW_DIR 로 경로를 지정해 주세요.")
+        raise SystemExit(f"원본 폴더에 Training/, Validation/ 없음: {raw_dir}\n"
+                         "--raw-dir 또는 환경변수 THESIS_RAW_DIR로 지정")
     os.makedirs(out_root, exist_ok=True)
     meta_path, err_path = os.path.join(out_root, "meta.csv"), os.path.join(out_root, "errors.csv")
     metas = pd.read_csv(meta_path).to_dict("records") if os.path.exists(meta_path) else []
