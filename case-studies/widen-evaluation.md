@@ -9,7 +9,7 @@
 ## 분석 흐름
 
 ```text
-data/features_v2 (보강 특징 167개, 7종 Training/Validation)
+data/features_v2 (보강 특징 166개, 7종 Training/Validation)
 → 설비종류마다 17번과 같은 방식으로 5묶음 배정
 → 묶음 설비는 Training까지 학습에서 빼고, Validation 기간으로 평가
 → 규칙 / 같은 종류만 학습 / 전체 종류 학습 비교

@@ -2,14 +2,14 @@
 
 ## 문제
 
-주 모델이 "펌프만 학습, 특징 148개"(처음 보는 펌프 설비 PR-AUC 0.470)에서 "펌프 + 6종 학습, 보강 특징 167개"(0.638)로 바뀌었다. 그런데 규칙, Logistic Regression, 예측 구간 10/60분 비교는 모두 옛 기준에서 나온 숫자였다. 논문 표에 두 기준이 섞이면 "새 조건에서도 순위가 같은가"에 답할 수 없다. 또 묶음별 PR-AUC가 0.445~0.871로 흔들려, 0.01~0.17 차이가 설비 구성과 관계없이 유지되는지도 숫자로 보여야 했다.
+주 모델이 "펌프만 학습, 특징 148개"(처음 보는 펌프 설비 PR-AUC 0.470)에서 "펌프 + 6종 학습, 보강 특징 166개"(0.638)로 바뀌었다. 그런데 규칙, Logistic Regression, 예측 구간 10/60분 비교는 모두 옛 기준에서 나온 숫자였다. 논문 표에 두 기준이 섞이면 "새 조건에서도 순위가 같은가"에 답할 수 없다. 또 묶음별 PR-AUC가 0.445~0.871로 흔들려, 0.01~0.17 차이가 설비 구성과 관계없이 유지되는지도 숫자로 보여야 했다.
 
 코드: [scripts/17_extra_facilities.py](../scripts/17_extra_facilities.py) `--compare --save-scores`, [scripts/19_unit_bootstrap.py](../scripts/19_unit_bootstrap.py), [scripts/20_threshold_recal.py](../scripts/20_threshold_recal.py)
 
 ## 분석 흐름
 
 ```text
-data/features_v2 (보강 특징 167개, 펌프 + 6종)
+data/features_v2 (보강 특징 166개, 펌프 + 6종)
 → 08번과 같은 펌프 5묶음 배정 (seed 0)
 → 규칙 / LightGBM 펌프만 / LightGBM·LR·RF 펌프+6종 학습
 → 처음 보는 펌프 설비 점수를 행 단위로 저장

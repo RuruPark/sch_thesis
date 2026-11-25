@@ -10,7 +10,7 @@
 
 ## 핵심 결과
 
-- 압축만 받아 두던 설비종류 6종(322대)을 학습에 더하고 상별 고조파·하루 이력 특징 19개를 보강하자, 학습에 없던 펌프/일반모터 설비 PR-AUC가 0.472에서 0.638로 올랐다(설비 단위 95% 구간 차이 +0.007~+0.275). 10분, 60분 예측에서도 +0.17로 같았다. [model-comparison-v2.md](case-studies/model-comparison-v2.md)
+- 압축만 받아 두던 설비종류 6종(322대)을 학습에 더하고 상별 고조파·하루 이력 특징 17개를 보강하자, 학습에 없던 펌프/일반모터 설비 PR-AUC가 0.472에서 0.638로 올랐다(설비 단위 95% 구간 차이 +0.007~+0.275). 10분, 60분 예측에서도 +0.17로 같았다. [model-comparison-v2.md](case-studies/model-comparison-v2.md)
 - 같은 조건에서 LightGBM(0.638)은 규칙(0.327)과 Logistic Regression(0.410)보다 확실히 높았고, Random Forest(0.645)와는 차이가 없었다. 2분 대기 경보로 사건 70.9%를 하루 오경보 2.5회로 잡았다.
 - 평가 대상을 7종으로 넓혀도 전체 종류 학습이 7종 모두에서 같은 종류만 학습보다 높았다(평균 0.497 → 0.593). 구간으로 확실한 것은 설비가 적거나 이상 있는 설비가 적은 가열로·펌프·공기압축기였다. [widen-evaluation.md](case-studies/widen-evaluation.md)
 - 이상 지속 기준을 3/10분으로 바꿔도 모델은 규칙보다 높았지만, 데이터 추가 효과는 5분 기준에서만 유의했다. 설비종류를 하나씩 빼도 0.60 이상이라 효과는 한 종류에 기대지 않았다. [event-duration.md](case-studies/event-duration.md), [leave-one-type-out.md](case-studies/leave-one-type-out.md)
@@ -105,7 +105,7 @@ flowchart LR
 | --- | --- | --- |
 | 베이스라인 비교 | 전류고조파 임계값 규칙만으로 PR-AUC 0.327(무작위 0.039)이다. 이후 모델은 이 규칙 대비로 보고한다 | [baseline-comparison.md](case-studies/baseline-comparison.md) |
 | 설비 단위 분할 | 펌프만 학습한 LightGBM은 0.470으로 같은 설비 뒤 기간 평가(0.738)보다 36% 낮지만 규칙보다 높다 | [unit-split.md](case-studies/unit-split.md) |
-| 다른 설비종류 추가, 특징 보강 | 설비종류 6종을 학습에 더하고 특징 19개를 보강해 0.636까지 올랐다 | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md) |
+| 다른 설비종류 추가, 특징 보강 | 설비종류 6종을 학습에 더하고 특징 17개를 보강해 0.636까지 올랐다 | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md) |
 | 새 주 모델 기준 비교 | LightGBM 0.638로 규칙(0.327), LR(0.410)보다 높고 RF(0.645)와는 차이가 없다. 데이터 추가 효과는 10/30/60분 모두 +0.17로 유의했다 | [model-comparison-v2.md](case-studies/model-comparison-v2.md) |
 | 평가 대상 넓히기 | 전체 종류 학습이 7종 모두에서 같은 종류만 학습보다 높았다(평균 0.497 → 0.593) | [widen-evaluation.md](case-studies/widen-evaluation.md) |
 | 연속 경보 규칙 | 경보가 2분 이어질 때만 알리면 같은 오경보 수준에서 규칙보다 사건을 27.6%p 더 잡는다 | [alarm-rule.md](case-studies/alarm-rule.md) |
@@ -223,7 +223,7 @@ sch_thesis/
 |   +-- 02b_eda_facility.py # 설비종류별 라벨 경계·품질 점검
 |   +-- 03_clean.py        # 2차 전처리
 |   +-- 04_make_target.py  # 30분 내 이상 발생 정답 라벨
-|   +-- 05_make_features.py # 모델 입력 특징 148개 (--extra로 보강 19개 추가)
+|   +-- 05_make_features.py # 모델 입력 특징 148개 (--extra로 보강 17개 추가)
 |   +-- 06_baseline.py     # 베이스라인 비교
 |   +-- 07_model_compare.py # Random Forest, LightGBM 비교
 |   +-- 08_unit_split.py   # 설비 단위 5묶음 분할 평가 (예측 구간, z 특징, 라벨 바꿔 반복)
