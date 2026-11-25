@@ -9,7 +9,7 @@
 ## 분석 흐름
 
 ```text
-data/features_v2 (보강 특징 167개, 7종 Training/Validation)
+data/features_v2 (보강 특징 166개, 7종 Training/Validation)
 → 설비종류마다 17번과 같은 방식으로 5묶음 배정
 → 묶음 설비는 Training까지 학습에서 빼고, Validation 기간으로 평가
 → 규칙 / 같은 종류만 학습 / 전체 종류 학습 비교
@@ -100,5 +100,5 @@ data/features_v2 (보강 특징 167개, 7종 Training/Validation)
 
 ## 다음에 확인할 것
 
-- 설비종류별 2분 대기 경보 결과 (`data/results/widen_v2_alarm.csv`)
+- 설비종류별 2분 대기 경보 결과 (`data/results/widen_v2s_alarm.csv`)
 - 새 설비 초기 며칠로 임계값만 다시 맞추는 방식: [model-comparison-v2.md](model-comparison-v2.md)에서 효과 없음을 확인함

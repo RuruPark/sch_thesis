@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# data/processed의 parquet를 csv.gz로 한 벌 더 저장 (Claude 분석 환경과 공유용)
+# data/processed의 parquet를 csv.gz로 한 벌 더 저장 (parquet를 못 여는 환경과 공유용)
 # 입력: data/processed (--src)  출력: data/processed_csv (--dst)
 # 사용법: python scripts/01b_export_csv.py
 import argparse, os, glob

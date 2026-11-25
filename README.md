@@ -10,7 +10,7 @@
 
 ## 핵심 결과
 
-- 압축만 받아 두던 설비종류 6종(322대)을 학습에 더하고 상별 고조파·하루 이력 특징 19개를 보강하자, 학습에 없던 펌프/일반모터 설비 PR-AUC가 0.472에서 0.638로 올랐다(설비 단위 95% 구간 차이 +0.007~+0.275). 10분, 60분 예측에서도 +0.17로 같았다. [model-comparison-v2.md](case-studies/model-comparison-v2.md)
+- 압축만 받아 두던 설비종류 6종(322대)을 학습에 더하고 상별 고조파·하루 이력 특징 17개를 보강하자, 학습에 없던 펌프/일반모터 설비 PR-AUC가 0.472에서 0.638로 올랐다(설비 단위 95% 구간 차이 +0.007~+0.275). 10분, 60분 예측에서도 +0.17로 같았다. [model-comparison-v2.md](case-studies/model-comparison-v2.md)
 - 같은 조건에서 LightGBM(0.638)은 규칙(0.327)과 Logistic Regression(0.410)보다 확실히 높았고, Random Forest(0.645)와는 차이가 없었다. 2분 대기 경보로 사건 70.9%를 하루 오경보 2.5회로 잡았다.
 - 평가 대상을 7종으로 넓혀도 전체 종류 학습이 7종 모두에서 같은 종류만 학습보다 높았다(평균 0.497 → 0.593). 구간으로 확실한 것은 설비가 적거나 이상 있는 설비가 적은 가열로·펌프·공기압축기였다. [widen-evaluation.md](case-studies/widen-evaluation.md)
 - 이상 지속 기준을 3/10분으로 바꿔도 모델은 규칙보다 높았지만, 데이터 추가 효과는 5분 기준에서만 유의했다. 설비종류를 하나씩 빼도 0.60 이상이라 효과는 한 종류에 기대지 않았다. [event-duration.md](case-studies/event-duration.md), [leave-one-type-out.md](case-studies/leave-one-type-out.md)
@@ -105,7 +105,7 @@ flowchart LR
 | --- | --- | --- |
 | 베이스라인 비교 | 전류고조파 임계값 규칙만으로 PR-AUC 0.327(무작위 0.039)이다. 이후 모델은 이 규칙 대비로 보고한다 | [baseline-comparison.md](case-studies/baseline-comparison.md) |
 | 설비 단위 분할 | 펌프만 학습한 LightGBM은 0.470으로 같은 설비 뒤 기간 평가(0.738)보다 36% 낮지만 규칙보다 높다 | [unit-split.md](case-studies/unit-split.md) |
-| 다른 설비종류 추가, 특징 보강 | 설비종류 6종을 학습에 더하고 특징 19개를 보강해 0.636까지 올랐다 | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md) |
+| 다른 설비종류 추가, 특징 보강 | 설비종류 6종을 학습에 더하고 특징 17개를 보강해 0.636까지 올랐다 | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md) |
 | 새 주 모델 기준 비교 | LightGBM 0.638로 규칙(0.327), LR(0.410)보다 높고 RF(0.645)와는 차이가 없다. 데이터 추가 효과는 10/30/60분 모두 +0.17로 유의했다 | [model-comparison-v2.md](case-studies/model-comparison-v2.md) |
 | 평가 대상 넓히기 | 전체 종류 학습이 7종 모두에서 같은 종류만 학습보다 높았다(평균 0.497 → 0.593) | [widen-evaluation.md](case-studies/widen-evaluation.md) |
 | 연속 경보 규칙 | 경보가 2분 이어질 때만 알리면 같은 오경보 수준에서 규칙보다 사건을 27.6%p 더 잡는다 | [alarm-rule.md](case-studies/alarm-rule.md) |
@@ -137,8 +137,8 @@ flowchart LR
 
 - 공조설비는 30분 내 이상 발생이 Training 19건, Validation 0건뿐이라 분석에서 뺐다. 보일러와 사출기도 라벨 경계가 덜 맞고 사건이 적어 평가하지 않았다. 7종 평가 중 가열로(8대)와 압출기(12대)는 표본이 작아 참고 수준이다.
 - 이상 발생 사건의 47%가 상위 5대 설비에 몰려 있다. 설비 단위 분할은 양성 수 순서로 묶음에 배정해 이 쏠림을 나눴지만, 묶음별 편차가 크다(처음 보는 설비 LightGBM 0.325~0.863).
-- 처음 보는 설비에서 LightGBM 하루 오경보는 8.4회로 같은 설비 평가(3.5회)의 두 배가 넘는다. 새 설비에는 임계값을 다시 맞춰야 한다.
-- SHAP 기여의 48.7%가 최근 이상 이력과 최근 60분 전류고조파 최댓값에서 나왔다. 라벨이 전류고조파 경계로 정해지므로, 다른 측정 항목에서 이상 징후를 미리 읽었다고 주장할 근거는 약하다.
+- 처음 보는 설비에서 최종 모델(펌프 + 6종 학습, 특징 166개)의 하루 오경보는 5.5회이고, 경보를 2분 이어질 때만 내면 2.5회이다.
+- 최종 모델 SHAP 기여 1·2위는 마지막 이상 후 경과 시간(17.8%)과 하루 이상 비율(16.3%)로, 둘 다 최근 이상 이력이다. 라벨이 전류고조파 경계로 정해지므로, 다른 측정 항목에서 이상 징후를 미리 읽었다고 주장할 근거는 약하다.
 - 설비별 z 특징은 처음 보는 설비 성능을 올리지 못했다. 정격 같은 설비 정보로 맞추는 방식은 데이터에 정보가 없어 시도하지 못했다.
 - Transformer는 GPU 없이 작은 모델(차원 64, 2층)을 최대 10 epoch만 학습했다. 6번 중 2번은 최대 epoch에 닿아, 더 큰 설정에서 결과가 달라질 수 있다.
 - 음수 유효전력 설비 4대(363, 406, 467, 548번)를 부호 반전할지 정하지 않았다.
@@ -157,6 +157,7 @@ pip install -r requirements.txt
 python scripts/01_preprocess.py --raw-dir "<원본 데이터 폴더>"
 python scripts/01b_export_csv.py
 python scripts/02_eda.py
+python scripts/02b_eda_facility.py
 python scripts/03_clean.py
 python scripts/04_make_target.py
 python scripts/05_make_features.py
@@ -170,12 +171,32 @@ python scripts/13_value_forecast.py
 python scripts/14_transformer.py
 python scripts/15_tune.py
 python scripts/16_tune_nested.py
+python scripts/05_make_features.py --extra --dst data/features_v2
 python scripts/17_extra_facilities.py --src data/features_v2 --compare --save-scores --tag v2cmp
 python scripts/19_unit_bootstrap.py --scores data/results/extra_fac_v2cmp_scores.parquet --tag v2cmp
 python scripts/20_threshold_recal.py --scores data/results/extra_fac_v2cmp_scores.parquet --tag v2cmp
 python scripts/18_widen_eval.py --src data/features_v2 --save-scores --tag v2s
 python scripts/19_unit_bootstrap.py --scores data/results/widen_v2s_scores.parquet --by facility --tag v2s
-python scripts/21_thesis_figures.py   # 논문용 그림 charts/thesis_fig*.png(300dpi), .pdf
+
+# 10/60분 예측의 데이터 추가 효과 (21번 그림 2, 3)
+python scripts/17_extra_facilities.py --src data/features_v2 --target target_10 --compare --save-scores --tag v2cmp_h10
+python scripts/19_unit_bootstrap.py --scores data/results/extra_fac_v2cmp_h10_scores.parquet --target target_10 --tag v2cmp_h10
+python scripts/17_extra_facilities.py --src data/features_v2 --target target_60 --compare --save-scores --tag v2cmp_h60
+python scripts/19_unit_bootstrap.py --scores data/results/extra_fac_v2cmp_h60_scores.parquet --target target_60 --tag v2cmp_h60
+
+# 이상 지속 기준 3/10분 (21번 그림 3). 10분도 3을 10으로 바꿔 같은 순서로 실행
+python scripts/04_make_target.py --min-event 3 --dst data/target_d3
+python scripts/05_make_features.py --extra --target data/target_d3 --dst data/features_v2_d3
+python scripts/17_extra_facilities.py --src data/features_v2_d3 --save-scores --tag v2_d3
+python scripts/19_unit_bootstrap.py --scores data/results/extra_fac_v2_d3_scores.parquet --tag v2_d3
+
+# 설비종류 하나씩 빼기 (21번 그림 4). 6종마다 하나를 빼고 태그 번호를 바꿔 실행
+python scripts/17_extra_facilities.py --src data/features_v2 --types 4.공작기계 6.가열로 7.압출기 9.주조기 10.열처리 --only-extra --tag v2_lo_3
+
+python scripts/17_extra_facilities.py --src data/features_v2 --shap --tag main
+python scripts/21_thesis_figures.py   # 논문 그림 1~8 charts/thesis_fig*.png(300dpi), .pdf
+python scripts/22_thesis_figures_more.py   # 논문 그림 9~19
+python scripts/23_thesis_figures_en.py   # 논문 양식용 영문 그림 charts/en/
 
 # 추가 실험: 설비별 z 특징, 예측 구간, 전압고조파 라벨
 python scripts/08_unit_split.py --norm --tag norm
@@ -189,14 +210,13 @@ python scripts/10_charts.py
 
 발표용 표와 그래프는 위 스크립트를 모두 돌린 뒤 `notebooks/01_presentation.ipynb`를 위에서부터 실행하면 `data/` 아래 결과 파일에서 읽어 `charts/presentation/`에 다시 만든다.
 
-12~16번은 08번이 만든 `data/results/unit_split_assign.csv`(묶음 배정)를 쓰므로 08번 뒤에 실행한다. 16번은 15번의 후보 목록(`tune_search.csv`)을 쓰므로 15번 뒤에 실행한다. 4코어 CPU에서 14번은 약 2시간, 15번은 약 45분, 16번은 약 2시간 걸렸다.
+13~16번은 08번이 만든 `data/results/unit_split_assign.csv`(묶음 배정)를 쓰므로 08번 뒤에 실행한다. 16번은 15번의 후보 목록(`tune_search.csv`)을 쓰므로 15번 뒤에 실행한다. 4코어 CPU에서 14번은 약 2시간, 15번은 약 45분, 16번은 약 2시간 걸렸다.
 
 ## 폴더 구조
 
 ```text
 sch_thesis/
 +-- README.md
-+-- CLAUDE.md              # Claude 작업 지침
 +-- case-studies/
 |   +-- baseline-comparison.md # 규칙 vs Logistic Regression
 |   +-- model-comparison.md # Random Forest, LightGBM 비교
@@ -208,6 +228,13 @@ sch_thesis/
 |   +-- voltage-harmonic.md # 전압고조파 라벨 보조 실험
 |   +-- value-forecast.md  # 선행 연구 방식(값 예측 후 판정) 재현
 |   +-- transformer.md     # Transformer 비교
+|   +-- tuning.md          # 하이퍼파라미터 탐색, 중첩 교차검증
+|   +-- extra-facilities.md # 다른 설비종류 추가
+|   +-- feature-extension.md # 특징 보강
+|   +-- model-comparison-v2.md # 최종 조건 모델 비교, 신뢰구간
+|   +-- widen-evaluation.md # 7종으로 평가 넓히기
+|   +-- event-duration.md  # 이상 지속 기준 3/5/10분
+|   +-- leave-one-type-out.md # 설비종류 하나씩 빼기
 +-- docs/
 |   +-- CONVENTIONS.md     # 정리 규칙
 |   +-- preprocessing.md   # 전처리 기록 (1차, 2차)
@@ -223,7 +250,7 @@ sch_thesis/
 |   +-- 02b_eda_facility.py # 설비종류별 라벨 경계·품질 점검
 |   +-- 03_clean.py        # 2차 전처리
 |   +-- 04_make_target.py  # 30분 내 이상 발생 정답 라벨
-|   +-- 05_make_features.py # 모델 입력 특징 148개 (--extra로 보강 19개 추가)
+|   +-- 05_make_features.py # 모델 입력 특징 148개 (--extra로 보강 17개 추가)
 |   +-- 06_baseline.py     # 베이스라인 비교
 |   +-- 07_model_compare.py # Random Forest, LightGBM 비교
 |   +-- 08_unit_split.py   # 설비 단위 5묶음 분할 평가 (예측 구간, z 특징, 라벨 바꿔 반복)
@@ -238,7 +265,9 @@ sch_thesis/
 |   +-- 18_widen_eval.py   # 설비종류별 처음 보는 설비 평가
 |   +-- 19_unit_bootstrap.py # 설비 단위 부트스트랩 신뢰구간
 |   +-- 20_threshold_recal.py # 새 설비 처음 며칠 임계값 재보정
-|   +-- 21_thesis_figures.py # 논문용 그림 (300dpi png, pdf)
+|   +-- 21_thesis_figures.py # 논문 그림 1~8 (300dpi png, pdf)
+|   +-- 22_thesis_figures_more.py # 논문 그림 9~19
+|   +-- 23_thesis_figures_en.py # 논문 양식용 영문 그림 26개
 |   +-- evaluate.py        # 06번 이후 공통 함수 (데이터 읽기, 임계값, 지표)
 +-- notebooks/
 |   +-- 01_presentation.ipynb # 발표용 표와 그래프 (결과 파일에서 읽음)
@@ -252,6 +281,8 @@ sch_thesis/
 |   +-- target/            # 설비별 정답 라벨 + target_summary.csv
 |   +-- features/          # 설비별 특징 parquet (예측 대상 시점만)
 |   +-- target_vh/, features_vh/ # 전압고조파 기준 라벨과 특징
+|   +-- features_v2/       # 보강 특징 (--extra)
+|   +-- target_d3/, target_d10/, features_v2_d3/, features_v2_d10/ # 이상 지속 3/10분 기준
 |   +-- results/           # 실험 결과표
 +-- requirements.txt
 +-- .gitignore

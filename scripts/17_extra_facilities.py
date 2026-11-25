@@ -92,7 +92,7 @@ COMPARE_MAX_ROWS = 1_500_000
 
 
 def compare_sample(d, target, w, seed=0):
-    # LR·RF는 표준화·대치 단계에서 float64 사본을 만들어, 펌프+6종 전체(수백만 행 × 167)를 넣을 경우 16GB에서 메모리가 모자라는 문제 있음
+    # LR·RF는 표준화·대치 단계에서 float64 사본을 만들어, 펌프+6종 전체(수백만 행 × 166)를 넣을 경우 16GB에서 메모리가 모자라는 문제 있음
     # 양성은 전부 두고 음성만 더 줄인 뒤 가중치로 되돌림
     neg = (d[target] == 0).to_numpy()
     frac = min(1.0, max(COMPARE_MAX_ROWS - int((~neg).sum()), 1) / max(int(neg.sum()), 1))
