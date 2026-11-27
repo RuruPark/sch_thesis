@@ -45,13 +45,15 @@ flowchart LR
 
 1차 결과를 EDA로 점검한 뒤 기준을 정해 2차 전처리를 했다. 설비 105대, 약 394만 행을 1분 단위 "시각 × 측정항목 35개 + 라벨 5개" 표로 바꾸고, 결측·이상값을 정리해 209개 파일 401만 행으로 확정했다.
 
-- SOH 라벨은 같은 시각 평균값에 고정 경계(역률 0.6/0.8, 전류고조파 30/60, 전압고조파 3/5)를 적용한 규칙 라벨이다. 운전 구간에서 경계만으로 97~99%가 재현된다.
-- 역률 SOH "경고"는 정지 구간의 93%에 붙어 있어 설비 상태가 아니라 정지 여부를 반영한다.
-
 - 결측치: 1분 격자에 맞추고 빈 분은 행으로 추가했다. 5분 이하 끊김만 선형 보간하고 더 긴 끊김(1시간 이상 73곳)은 결측으로 남겼다.
 - 이상치: 전류 측정 상한값(512, 4095.94 A), 상전압 500 V 초과, 전원이 들어온 상태의 주파수 55~65 Hz 밖은 결측으로 바꿨다. 음수 전력·역률은 특정 설비에서 일관되게 나와 그대로 뒀다.
 - 제외 구간: 전원이 95% 이상 꺼져 있던 Validation 80번 파일을 뺐다. 정지 구간은 지우지 않고 `flag_power_off`와 기동 라벨로 구분한다.
 - 스케일링: 모델 단계에서 Training 기준으로 한다.
+
+EDA에서 확인한 라벨 성질은 아래와 같다.
+
+- SOH 라벨은 같은 시각 평균값에 고정 경계(역률 0.6/0.8, 전류고조파 30/60, 전압고조파 3/5)를 적용한 규칙 라벨이다. 운전 구간에서 경계만으로 97~99%가 재현된다.
+- 역률 SOH "경고"는 정지 구간의 93%에 붙어 있어 설비 상태가 아니라 정지 여부를 반영한다.
 
 ## 분석 방법
 
@@ -99,19 +101,19 @@ flowchart LR
 
 ## 실험 기록
 
-주 결론을 받치는 실험만 남겼다. 17개 실험 전체의 요약과 핵심 질문은 [docs/experiments.md](docs/experiments.md)에 있다. PR-AUC는 모두 처음 보는 설비 기준이다.
+주 결론을 뒷받침하는 실험만 남겼다. 17개 실험 전체의 요약과 핵심 질문은 [docs/experiments.md](docs/experiments.md)에 있다. PR-AUC는 모두 처음 보는 설비 기준이다.
 
 | 실험 | 핵심 결과 | 문서 |
 | --- | --- | --- |
 | 베이스라인 비교 | 전류고조파 임계값 규칙만으로 PR-AUC 0.327(무작위 0.039)이다. 이후 모델은 이 규칙 대비로 보고한다 | [baseline-comparison.md](case-studies/baseline-comparison.md) |
 | 설비 단위 분할 | 펌프만 학습한 LightGBM은 0.470으로 같은 설비 뒤 기간 평가(0.738)보다 36% 낮지만 규칙보다 높다 | [unit-split.md](case-studies/unit-split.md) |
-| 다른 설비종류 추가, 특징 보강 | 설비종류 6종을 학습에 더하고 특징 17개를 보강해 0.636까지 올랐다 | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md) |
+| 다른 설비종류 추가, 특징 보강 | 설비종류 6종을 학습에 더하고 특징 17개를 보강해 묶음 배정 5가지 평균 0.636까지 올랐다 | [extra-facilities.md](case-studies/extra-facilities.md), [feature-extension.md](case-studies/feature-extension.md) |
 | 새 주 모델 기준 비교 | LightGBM 0.638로 규칙(0.327), LR(0.410)보다 높고 RF(0.645)와는 차이가 없다. 데이터 추가 효과는 10/30/60분 모두 +0.17로 유의했다 | [model-comparison-v2.md](case-studies/model-comparison-v2.md) |
 | 평가 대상 넓히기 | 전체 종류 학습이 7종 모두에서 같은 종류만 학습보다 높았다(평균 0.497 → 0.593) | [widen-evaluation.md](case-studies/widen-evaluation.md) |
 | 연속 경보 규칙 | 경보가 2분 이어질 때만 알리면 같은 오경보 수준에서 규칙보다 사건을 27.6%p 더 잡는다 | [alarm-rule.md](case-studies/alarm-rule.md) |
 | 값 예측 후 판정 | 선행 연구 방식은 0.222로 규칙보다 낮아, 전환을 직접 분류하는 방식을 택했다 | [value-forecast.md](case-studies/value-forecast.md) |
 
-예측 구간, 이상 지속 기준, 설비종류 하나씩 빼기 같은 견고성 확인과 효과가 없었던 시도(z 특징, 하이퍼파라미터 탐색, Transformer)도 docs/experiments.md에 있다.
+예측 구간, 이상 지속 기준, 설비종류 하나씩 빼기 같은 견고성 확인과 효과가 없었던 시도(z 특징, 하이퍼파라미터 탐색, Transformer)도 [docs/experiments.md](docs/experiments.md)에 있다.
 
 ## 결과와 해석
 
